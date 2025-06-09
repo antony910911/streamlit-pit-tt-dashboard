@@ -6,3 +6,4 @@ numpy
 requests
 beautifulsoup4
 chardet
+rich<14,>=10.14.0
