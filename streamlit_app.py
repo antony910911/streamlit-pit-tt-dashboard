@@ -8,6 +8,16 @@ import requests
 from bs4 import BeautifulSoup
 import time
 
+
+import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
+
+font_path = "NotoSansTC-Regular.ttf"  # 你把 NotoSansTC-Regular.ttf 放在 repo 的 fonts/ 資料夾
+font_prop = fm.FontProperties(fname=font_path)
+
+plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
+plt.rcParams['axes.unicode_minus'] = False
+
 # ==== 字型設定，避免中文亂碼 ====
 plt.rcParams['font.sans-serif'] = ['Heiti TC', 'Arial Unicode MS', 'Microsoft JhengHei', 'sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
@@ -321,9 +331,16 @@ if df_all is not None:
         df_all[col + "_running"] = df_all[col].apply(convert_running_state)
 
     # ==== 時間區段用查詢時的時間固定 ====
+    import pytz
+    tz = pytz.timezone('Asia/Taipei')
     start_datetime = pd.to_datetime(f"{query_start_date} {query_start_time}")
+    start_datetime = tz.localize(start_datetime).tz_convert('Asia/Taipei').tz_localize(None)
+
     end_datetime = pd.to_datetime(f"{query_end_date} {query_end_time}")
+    end_datetime = tz.localize(end_datetime).tz_convert('Asia/Taipei').tz_localize(None)
+
     df_plot = df_all.loc[(df_all.index >= start_datetime) & (df_all.index <= end_datetime)]
+
     st.write(f"✅ 擷取時間段：{start_datetime} ～ {end_datetime}，總筆數：{len(df_plot)}")
 
     # ==== PIT/TT 欄位轉 full name ====
