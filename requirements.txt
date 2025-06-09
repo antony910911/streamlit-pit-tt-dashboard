@@ -1,3 +1,4 @@
+sudo apt-get install fonts-noto-cjk
 streamlit==1.35.0
 pandas
 matplotlib
