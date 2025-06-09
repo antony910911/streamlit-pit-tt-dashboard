@@ -334,21 +334,39 @@ if df_all is not None:
 
    
     # ==== 繪圖 ====
+    # ==== 繪圖 ==== (整段新版)
+    import matplotlib.font_manager as fm
+
+    # ==== 字型設定，避免中文亂碼 ====
+    try:
+        font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+        font_prop = fm.FontProperties(fname=font_path)
+        plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
+    except Exception as e:
+        print(f"[WARNING] 沒找到 NotoSansCJK-Regular.ttc，改用內建 fallback，Exception: {e}")
+        plt.rcParams['font.sans-serif'] = ['sans-serif', 'Heiti TC', 'Arial Unicode MS', 'Microsoft JhengHei']
+    plt.rcParams['axes.unicode_minus'] = False
+
+    # ==== 時區處理 ==== → 保證 X 軸正確
+    import pytz
+    tz = pytz.timezone('Asia/Taipei')
+    start_datetime = pd.to_datetime(f"{query_start_date} {query_start_time}").tz_localize(tz).tz_convert(tz).tz_localize(None)
+    end_datetime = pd.to_datetime(f"{query_end_date} {query_end_time}").tz_localize(tz).tz_convert(tz).tz_localize(None)
+
+    # ==== 繪圖開始 ====
     fig, ax1 = plt.subplots(figsize=(24, 14))
-    
+
     df_pit_resampled = df_plot.resample(sampling_interval).agg(
         {col: "mean" for col in pit_tt_columns_full}
     )
     df_pit_resampled = df_pit_resampled.asfreq(sampling_interval)
-
 
     trim_delta = pd.Timedelta(minutes=5)
     trim_start = df_pit_resampled.index.min() + trim_delta
     trim_end = df_pit_resampled.index.max() - trim_delta
     trim_mask = (df_pit_resampled.index >= trim_start) & (df_pit_resampled.index <= trim_end)
 
-    # ==== 決定 Y 軸標籤 & 圖片標題 ====
-    # ==== 先轉換取樣間隔顯示用字串 ====
+    # ==== 標題 & Y 標籤 ====
     sampling_interval_display_map = {
         "5s": "5 秒",
         "10s": "10 秒",
@@ -359,7 +377,6 @@ if df_all is not None:
     }
     sampling_interval_display = sampling_interval_display_map.get(sampling_interval, sampling_interval)
 
-    # ==== 再建構標題 ====
     if all(col.startswith("pit-") for col in selected_pit_tt_prefixes):
         y_label = "PIT 趨勢圖 (kPa)"
         plot_title = f"PIT 趨勢圖 (取樣間隔：{sampling_interval_display})\n{start_datetime} ~ {end_datetime}"
@@ -370,11 +387,10 @@ if df_all is not None:
         y_label = "PIT / TT 趨勢圖"
         plot_title = f"PIT / TT 趨勢圖 (取樣間隔：{sampling_interval_display})\n{start_datetime} ~ {end_datetime}"
 
-    # ==== 如果有設備就加上 "及設備起停圖" → 不用 replace，用重新組字串更安全 ====
     if len(equipment_cols_full) > 0:
         plot_title = plot_title.replace("趨勢圖", "趨勢及設備起停圖")
 
-    # ==== PIT/TT 趨勢線圖 (這段永遠要畫！不要被 if 包住) ====
+    # ==== PIT/TT 趨勢線圖 ====
     for col in pit_tt_columns_full:
         ax1.plot(df_pit_resampled.index[trim_mask], df_pit_resampled[col][trim_mask],
                 label=col,
@@ -386,15 +402,24 @@ if df_all is not None:
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M"))
     plt.xticks(rotation=45, fontsize=font_size + 4)
 
-    # ==== Y 軸範圍 ====
+    # ==== Y 軸範圍 (新版，robust 不會崩) ====
     if pit_tt_y_axis_mode == "固定 0~1":
         ax1.set_ylim(0, 1)
     elif pit_tt_y_axis_mode == "自訂 min/max":
         ax1.set_ylim(y_min_custom, y_max_custom)
     else:
-        y_min = df_pit_resampled[pit_tt_columns_full].min().min()
-        y_max = df_pit_resampled[pit_tt_columns_full].max().max()
-        ax1.set_ylim(y_min * 0.95, y_max * 1.05)
+        df_valid_columns = df_pit_resampled[pit_tt_columns_full].dropna(axis=1, how='all')
+        if not df_valid_columns.empty:
+            y_min = df_valid_columns.min().min()
+            y_max = df_valid_columns.max().max()
+            print(f"[DEBUG] y_min={y_min}, y_max={y_max}")
+
+            if np.isfinite(y_min) and np.isfinite(y_max):
+                ax1.set_ylim(y_min * 0.95, y_max * 1.05)
+            else:
+                print("[WARNING] y_min or y_max is not finite, skipping set_ylim()")
+        else:
+            print("[WARNING] All selected columns are empty after dropna, skipping set_ylim()")
 
     # ==== X 軸區間 ====
     ax1.set_xlim(start_datetime, end_datetime)
@@ -407,15 +432,15 @@ if df_all is not None:
     # ==== Y 軸刻度字體大小 ====
     ax1.tick_params(axis='y', labelsize=font_size + 3)
 
-    # ==== 圖例放「標題下方」置中 ====
+    # ==== 圖例 ====
     fig.legend(
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.92),  # 置中
+        bbox_to_anchor=(0.5, 0.92),
         ncol=4,
         fontsize=font_size + 4
     )
 
-    # ==== 設備啟停圖 (只有有設備時才畫) ====
+    # ==== 設備起停圖 ====
     if len(equipment_cols_full) > 0:
         ax2 = ax1.twinx()
         y_positions = np.arange(len(equipment_cols_full))
