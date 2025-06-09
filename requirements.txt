@@ -1,4 +1,4 @@
-sudo apt-get install fonts-noto-cjk
+rich<14,>=10.14.0
 streamlit==1.35.0
 pandas
 matplotlib
@@ -6,4 +6,4 @@ numpy
 requests
 beautifulsoup4
 chardet
-rich<14,>=10.14.0
+
