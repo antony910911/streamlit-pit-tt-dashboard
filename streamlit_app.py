@@ -119,10 +119,11 @@ def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
     df = pd.read_csv(csv_filename, skiprows=2, names=combined_columns, low_memory=False, encoding=safe_encoding)
 
     timestamp_col = combined_columns[1]
-    # 直接轉 naive Asia/Taipei → 不要加 utc=True，不要用 tz_convert → 最穩定
-    df["Datetime"] = pd.to_datetime(df[timestamp_col], unit="s") + pd.Timedelta(hours=0)
+
+    df["Datetime"] = pd.to_datetime(df[timestamp_col], unit="s", utc=True).dt.tz_convert("Asia/Taipei").dt.tz_localize(None)
 
     df.set_index("Datetime", inplace=True)
+
 
     return df, combined_columns
 # ==== 初始化 Session State ====
