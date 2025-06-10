@@ -387,9 +387,9 @@ if df_all is not None:
         ncol=ncol,
         fontsize=font_size + 4
     )
+    # 調整主圖範圍，top 要動態
+    plt.subplots_adjust(top=top_adjust)
 
-# 調整主圖範圍，top 要動態
-plt.subplots_adjust(top=top_adjust)
 
 # ==== 設備啟停圖 ====
 if len(equipment_cols_full) > 0:
