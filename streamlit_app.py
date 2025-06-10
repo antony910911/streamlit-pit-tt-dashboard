@@ -36,12 +36,14 @@ def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
     import datetime
     import chardet
     import zipfile
+    import pytz
 
-    start_datetime_obj = datetime.datetime.combine(start_date, start_time)
-    end_datetime_obj = datetime.datetime.combine(end_date, end_time)
+    tz = pytz.timezone("Asia/Taipei")
+    start_datetime_obj = tz.localize(datetime.datetime.combine(start_date, start_time))
+    end_datetime_obj = tz.localize(datetime.datetime.combine(end_date, end_time))
 
-    startEpoch = int(start_datetime_obj.timestamp())
-    endEpoch = int(end_datetime_obj.timestamp())
+    startEpoch = int(start_datetime_obj.astimezone(pytz.utc).timestamp())
+    endEpoch = int(end_datetime_obj.astimezone(pytz.utc).timestamp())
 
     query_url = "https://ah2e-txi.barn-pence.ts.net/csvquery"
     query_payload = {
@@ -120,7 +122,7 @@ def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
 
     timestamp_col = combined_columns[1]
 
-    df["Datetime"] = pd.to_datetime(df[timestamp_col], unit="s") + pd.Timedelta(hours=0)
+    df["Datetime"] = pd.to_datetime(df[timestamp_col], unit="s", utc=True).dt.tz_convert("Asia/Taipei").dt.tz_localize(None)
 
     df.set_index("Datetime", inplace=True)
 
