@@ -365,12 +365,28 @@ if df_all is not None:
     ax1.tick_params(axis='y', labelsize=font_size + 3)
 
     # ==== 圖例 ====
+    # 計算有幾條線
+    num_lines = len(pit_tt_columns_full)
+    # 每行放 4 條
+    ncol = min(num_lines, 4)
+    # 算出有幾行 legend
+    num_rows = int(np.ceil(num_lines / ncol))
+
+    # 動態調整 legend y 位置 & 圖的 top
+    # y_start 越大 → legend 靠上、圖區越大
+    legend_y_start = 0.5 + 0.05 * (num_rows - 1)  # 每多一行多推一點上去
+    top_adjust = 0.85 - 0.05 * (num_rows - 1)  # 主圖 top 往下收一點，避免擠到 legend
+
+    # 加 legend
     fig.legend(
         loc="upper center",
-        bbox_to_anchor=(0.5, 1.05),  # 調到圖框外
-        ncol=4,
+        bbox_to_anchor=(0.5, legend_y_start),
+        ncol=ncol,
         fontsize=font_size + 4
     )
+
+# 調整主圖範圍，top 要動態
+plt.subplots_adjust(top=top_adjust)
 
     # ==== 設備啟停圖 ====
     if len(equipment_cols_full) > 0:
