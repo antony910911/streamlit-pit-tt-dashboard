@@ -253,9 +253,6 @@ if df_all is not None:
         df_all[col + "_running"] = df_all[col].apply(convert_running_state)
 
     # ==== 修正版 df_plot（時區一致，不差 8 小時）====
-    tz = pytz.timezone('Asia/Taipei')
-    start_datetime = pd.to_datetime(f"{query_start_date} {query_start_time}")
-    start_datetime = tz.localize(start_datetime).tz_convert('Asia/Taipei').tz_localize(None)
 
     end_datetime = pd.to_datetime(f"{query_end_date} {query_end_time}")
     end_datetime = tz.localize(end_datetime).tz_convert('Asia/Taipei').tz_localize(None)
