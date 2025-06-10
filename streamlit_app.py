@@ -519,9 +519,6 @@ if df_all is not None:
     for col_prefix in selected_equipment_prefixes:
         full_col = [col for col in all_columns if col.startswith(col_prefix)][0]
         equipment_cols_full.append(full_col)
-
-
-
     
 
     # ==== 轉換設備狀態欄位 ====
@@ -552,6 +549,13 @@ if df_all is not None:
 
 # ==== 繪圖（允許只畫設備啟停圖）====
 fig, ax1 = plt.subplots(figsize=(24, 14))
+
+# ==== 初始化線條顏色設定（可讓使用者自訂每條線顏色）====
+color_map_per_line = {}
+for i, col in enumerate(pit_tt_columns_full):
+    default_color = plt.cm.tab10(i % 10)
+    selected_color = st.sidebar.color_picker(f"線條顏色 - {col}", '#%02x%02x%02x' % tuple(int(255*x) for x in default_color[:3]))
+    color_map_per_line[col] = selected_color
 
 if len(pit_tt_columns_full) > 0:
     df_pit_resampled = df_plot.resample(sampling_interval).agg(
