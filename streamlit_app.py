@@ -13,15 +13,23 @@ import matplotlib.font_manager as fm
 import pytz
 
 # ==== 強制字型設定 ====
-try:
-    font_path = "fonts/NotoSansTC-Regular.ttf"
-    font_prop = fm.FontProperties(fname=font_path)
-    plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
-except Exception as e:
-    print(f"[WARNING] 找不到字型，Fallback，Exception: {e}")
-    plt.rcParams['font.sans-serif'] = ['sans-serif', 'Heiti TC', 'Arial Unicode MS', 'Microsoft JhengHei']
+import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
 
-plt.rcParams['axes.unicode_minus'] = False
+font_path = "fonts/NotoSansTC-Regular.ttf"
+
+try:
+    fm.fontManager.addfont(font_path)
+    font_prop = fm.FontProperties(fname=font_path)
+    font_name = font_prop.get_name()
+
+    plt.rcParams['font.sans-serif'] = [font_name]
+    plt.rcParams['axes.unicode_minus'] = False
+
+    print(f"✅ 現在用字型：{font_name}")
+except Exception as e:
+    print(f"[WARNING] 字型沒抓到，Fallback，Exception: {e}")
+    plt.rcParams['font.sans-serif'] = ['sans-serif']
 
 # ==== 自動爬 CSV 函數 ====
 def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
@@ -269,9 +277,10 @@ if df_all is not None:
     df_pit_resampled = df_pit_resampled.asfreq(sampling_interval)
 
     trim_delta = pd.Timedelta(minutes=5)
-    trim_start = df_pit_resampled.index.min() + trim_delta
-    trim_end = df_pit_resampled.index.max() - trim_delta
+    trim_start = start_datetime + trim_delta
+    trim_end = end_datetime - trim_delta
     trim_mask = (df_pit_resampled.index >= trim_start) & (df_pit_resampled.index <= trim_end)
+
 
     # ==== 標題 & Y 標籤 ====
     sampling_interval_display_map = {
