@@ -274,9 +274,10 @@ if df_all is not None:
         full_col = [col for col in all_columns if col.startswith(col_prefix)][0]
         pit_tt_columns_full.append(full_col)
 
-    # ==== 繪圖 ====
-    fig, ax1 = plt.subplots(figsize=(24, 14))
+# ==== 繪圖（允許只畫設備啟停圖）====
+fig, ax1 = plt.subplots(figsize=(24, 14))
 
+if len(pit_tt_columns_full) > 0:
     df_pit_resampled = df_plot.resample(sampling_interval).agg(
         {col: "mean" for col in pit_tt_columns_full}
     )
@@ -287,15 +288,10 @@ if df_all is not None:
     trim_end = end_datetime - trim_delta
     trim_mask = (df_pit_resampled.index >= trim_start) & (df_pit_resampled.index <= trim_end)
 
-
     # ==== 標題 & Y 標籤 ====
     sampling_interval_display_map = {
-        "5s": "5 秒",
-        "10s": "10 秒",
-        "30s": "30 秒",
-        "1min": "1 分鐘",
-        "5min": "5 分鐘",
-        "15min": "15 分鐘",
+        "5s": "5 秒", "10s": "10 秒", "30s": "30 秒",
+        "1min": "1 分鐘", "5min": "5 分鐘", "15min": "15 分鐘",
     }
     sampling_interval_display = sampling_interval_display_map.get(sampling_interval, sampling_interval)
 
@@ -312,31 +308,17 @@ if df_all is not None:
     if len(equipment_cols_full) > 0:
         plot_title = plot_title.replace("趨勢圖", "趨勢及設備起停圖")
 
-    # ==== PIT/TT 趨勢線圖 ====
-    default_colors = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
-        "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
-        "#bcbd22", "#17becf"
-    ]
-
-    color_map_per_line = {}
-    for i, col in enumerate(pit_tt_columns_full):
-        default_color = default_colors[i % len(default_colors)]
-        selected_color = st.sidebar.color_picker(f"線條顏色 - {col}", default_color)
-        color_map_per_line[col] = selected_color
-
+    # ==== 畫線 ====
     for col in pit_tt_columns_full:
         ax1.plot(df_pit_resampled.index[trim_mask], df_pit_resampled[col][trim_mask],
-                label=col,
-                linewidth=2,
-                color=color_map_per_line[col])
+                 label=col,
+                 linewidth=2,
+                 color=color_map_per_line[col])
 
-    # ==== X 軸設定 ====
     ax1.xaxis.set_major_locator(x_major_locator)
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M"))
     plt.xticks(rotation=45, fontsize=font_size + 4)
 
-    # ==== Y 軸範圍 robust ====
     if pit_tt_y_axis_mode == "固定 0~1":
         ax1.set_ylim(0, 1)
     elif pit_tt_y_axis_mode == "自訂 min/max":
@@ -346,49 +328,38 @@ if df_all is not None:
         if not df_valid_columns.empty:
             y_min = df_valid_columns.min().min()
             y_max = df_valid_columns.max().max()
-            print(f"[DEBUG] y_min={y_min}, y_max={y_max}")
-
             if np.isfinite(y_min) and np.isfinite(y_max):
                 ax1.set_ylim(y_min * 0.95, y_max * 1.05)
-            else:
-                print("[WARNING] y_min or y_max is not finite, skipping set_ylim()")
-        else:
-            print("[WARNING] All selected columns are empty after dropna, skipping set_ylim()")
 
-    # ==== X 軸區間 ==== → 用完整 start_datetime ~ end_datetime
     ax1.set_xlim(start_datetime, end_datetime)
-
-
-    # ==== 標題、X、Y 軸標籤 ====
     ax1.set_xlabel("時間", fontsize=font_size + 6, labelpad=10, fontweight="bold")
     ax1.set_ylabel(y_label, fontsize=font_size + 6, labelpad=10, fontweight="bold")
     ax1.set_title(plot_title, fontsize=font_size + 17, pad=70, fontweight="bold")
-
-    # ==== Y 軸刻度字體大小 ====
     ax1.tick_params(axis='y', labelsize=font_size + 3)
 
-    # ==== 圖例 ====
-    # 計算有幾條線
+    # ==== 圖例動態位置 ====
     num_lines = len(pit_tt_columns_full)
-    # 每行放 4 條
     ncol = min(num_lines, 4)
-    # 算出有幾行 legend
     num_rows = int(np.ceil(num_lines / ncol))
+    legend_y_start = 0.92 + 0.01 * (num_rows - 1)
+    top_adjust = 0.85 - 0.3 * (num_rows - 1)
 
-    # 動態調整 legend y 位置 & 圖的 top
-    # y_start 越大 → legend 靠上、圖區越大
-    legend_y_start = 0.92 + 0.01 * (num_rows - 1)  # 每多一行多推一點上去
-    top_adjust = 0.85 - 0.3 * (num_rows - 1)  # 主圖 top 往下收一點，避免擠到 legend
-
-    # 加 legend
     fig.legend(
         loc="upper center",
         bbox_to_anchor=(0.5, legend_y_start),
         ncol=ncol,
         fontsize=font_size + 4
     )
-    # 調整主圖範圍，top 要動態
     plt.subplots_adjust(top=top_adjust)
+
+else:
+    # 沒選 PIT/TT，空主圖 + title
+    ax1.set_title("設備啟停圖（未選擇 PIT / TT 趨勢圖）", fontsize=font_size + 17, pad=70, fontweight="bold")
+    ax1.set_xlim(start_datetime, end_datetime)
+    ax1.set_xlabel("時間", fontsize=font_size + 6, labelpad=10, fontweight="bold")
+    ax1.set_yticks([])
+    ax1.set_yticklabels([])
+
 
 
     # ==== 設備啟停圖 ====
