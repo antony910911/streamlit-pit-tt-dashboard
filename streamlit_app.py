@@ -374,7 +374,7 @@ if df_all is not None:
 
     # 動態調整 legend y 位置 & 圖的 top
     # y_start 越大 → legend 靠上、圖區越大
-    legend_y_start = 0.82 + 0.05 * (num_rows - 1)  # 每多一行多推一點上去
+    legend_y_start = 0.92 + 0.05 * (num_rows - 1)  # 每多一行多推一點上去
     top_adjust = 0.85 - 0.05 * (num_rows - 1)  # 主圖 top 往下收一點，避免擠到 legend
 
     # 加 legend
