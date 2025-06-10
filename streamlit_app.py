@@ -350,7 +350,7 @@ if df_all is not None:
             print("[WARNING] All selected columns are empty after dropna, skipping set_ylim()")
 
     # ==== X 軸區間 ====
-    ax1.set_xlim(start_datetime, end_datetime)
+    ax1.set_xlim(trim_start, trim_end)
 
     # ==== 標題、X、Y 軸標籤 ====
     ax1.set_xlabel("時間", fontsize=font_size + 6, labelpad=10, fontweight="bold")
