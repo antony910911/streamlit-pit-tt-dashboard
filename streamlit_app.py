@@ -136,6 +136,9 @@ if "df_all" not in st.session_state:
     st.session_state.query_start_time = None
     st.session_state.query_end_date = None
     st.session_state.query_end_time = None
+    
+# ==== 初始化 pit_cols，避免 NameError ====
+pit_cols = []
 
 # ==== Sidebar - 查詢資料區 ====
 st.sidebar.title("⚙️ 設定選項 - 資料查詢")
