@@ -252,10 +252,11 @@ if df_all is not None:
     for col in equipment_cols_full:
         df_all[col + "_running"] = df_all[col].apply(convert_running_state)
 
-    # ==== 修正版 df_plot（時區一致，不差 8 小時）====
+    # 🚫 不要加 pytz / 不要加 tz_localize
 
+    start_datetime = pd.to_datetime(f"{query_start_date} {query_start_time}")
     end_datetime = pd.to_datetime(f"{query_end_date} {query_end_time}")
-    end_datetime = tz.localize(end_datetime).tz_convert('Asia/Taipei').tz_localize(None)
+
 
     df_plot = df_all.loc[(df_all.index >= start_datetime) & (df_all.index <= end_datetime)]
     st.write(f"✅ 擷取時間段：{start_datetime} ～ {end_datetime}，總筆數：{len(df_plot)}")
