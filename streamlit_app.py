@@ -391,31 +391,31 @@ if df_all is not None:
     plt.subplots_adjust(top=top_adjust)
 
 
-# ==== 設備啟停圖 ====
-if len(equipment_cols_full) > 0:
-    ax2 = ax1.twinx()
-    y_positions = np.arange(len(equipment_cols_full))
+    # ==== 設備啟停圖 ====
+    if len(equipment_cols_full) > 0:
+        ax2 = ax1.twinx()
+        y_positions = np.arange(len(equipment_cols_full))
 
-    for i, col in enumerate(equipment_cols_full):
-        state_series = df_plot[col + "_running"].fillna(0).astype(int)
-        change_idx = state_series.ne(state_series.shift()).cumsum()
+        for i, col in enumerate(equipment_cols_full):
+            state_series = df_plot[col + "_running"].fillna(0).astype(int)
+            change_idx = state_series.ne(state_series.shift()).cumsum()
 
-        for grp_id, grp_df in state_series.groupby(change_idx):
-            grp_state = grp_df.iloc[0]
-            grp_start_time = grp_df.index[0]
-            grp_end_time = grp_df.index[-1] + pd.Timedelta(seconds=5)
-            grp_end_time = min(grp_end_time, end_datetime)
-            color = "green" if grp_state == 1 else "red"
+            for grp_id, grp_df in state_series.groupby(change_idx):
+                grp_state = grp_df.iloc[0]
+                grp_start_time = grp_df.index[0]
+                grp_end_time = grp_df.index[-1] + pd.Timedelta(seconds=5)
+                grp_end_time = min(grp_end_time, end_datetime)
+                color = "green" if grp_state == 1 else "red"
 
-            ax2.axvspan(grp_start_time, grp_end_time,
-                            ymin=(i+0.1)/len(equipment_cols_full),
-                            ymax=(i+0.9)/len(equipment_cols_full),
-                            color=color, alpha=0.3)
+                ax2.axvspan(grp_start_time, grp_end_time,
+                                ymin=(i+0.1)/len(equipment_cols_full),
+                                ymax=(i+0.9)/len(equipment_cols_full),
+                                color=color, alpha=0.3)
 
-    ax2.set_ylim(-0.5, len(equipment_cols_full)-0.5)
-    ax2.set_yticks(y_positions)
-    ax2.set_yticklabels(equipment_cols_full, fontsize=font_size + 4)
-    ax2.set_ylabel("設備運作狀態", fontsize=font_size + 6)
+        ax2.set_ylim(-0.5, len(equipment_cols_full)-0.5)
+        ax2.set_yticks(y_positions)
+        ax2.set_yticklabels(equipment_cols_full, fontsize=font_size + 4)
+        ax2.set_ylabel("設備運作狀態", fontsize=font_size + 6)
 
     # ==== 完成圖表繪製 ====
     plt.tight_layout()
