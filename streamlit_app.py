@@ -180,6 +180,33 @@ if df_all is not None:
         "15分鐘": "15min",
     }
     sampling_interval = sampling_interval_map[sampling_interval_display]
+    # ==== X 軸主刻度 ====
+    x_axis_interval = st.sidebar.selectbox(
+        "X 軸主刻度間距",
+        ["30分鐘", "1小時", "2小時", "3小時", "4小時", "6小時", "12小時", "1天"]
+    )
+    interval_map = {
+        "30分鐘": mdates.MinuteLocator(interval=30),
+        "1小時": mdates.HourLocator(interval=1),
+        "2小時": mdates.HourLocator(interval=2),
+        "3小時": mdates.HourLocator(interval=3),
+        "4小時": mdates.HourLocator(interval=4),
+        "6小時": mdates.HourLocator(interval=6),
+        "12小時": mdates.HourLocator(interval=12),
+        "1天": mdates.DayLocator(interval=1),
+    }
+    x_major_locator = interval_map.get(x_axis_interval, mdates.HourLocator(interval=1))
+
+    # ==== Y 軸區間設定 ====
+    pit_tt_y_axis_mode = st.sidebar.radio("PIT / TT Y 軸區間", ["Auto", "固定 0~1", "自訂 min/max"])
+    y_min_custom = None
+    y_max_custom = None
+    if pit_tt_y_axis_mode == "自訂 min/max":
+        y_min_custom = st.sidebar.number_input("自訂 Y 軸最小值", value=0.0)
+        y_max_custom = st.sidebar.number_input("自訂 Y 軸最大值", value=1.0)
+
+    # ==== 字體大小 ====
+    font_size = st.sidebar.slider("字體大小", 8, 24, 14)
 
     # ==== PIT/TT 選擇 ====
     available_pit_tt_prefixes = sorted(list(set(
@@ -217,33 +244,9 @@ if df_all is not None:
         full_col = [col for col in all_columns if col.startswith(col_prefix)][0]
         equipment_cols_full.append(full_col)
 
-    # ==== 字體大小 ====
-    font_size = st.sidebar.slider("字體大小", 8, 24, 14)
 
-    # ==== X 軸主刻度 ====
-    x_axis_interval = st.sidebar.selectbox(
-        "X 軸主刻度間距",
-        ["30分鐘", "1小時", "2小時", "3小時", "4小時", "6小時", "12小時", "1天"]
-    )
-    interval_map = {
-        "30分鐘": mdates.MinuteLocator(interval=30),
-        "1小時": mdates.HourLocator(interval=1),
-        "2小時": mdates.HourLocator(interval=2),
-        "3小時": mdates.HourLocator(interval=3),
-        "4小時": mdates.HourLocator(interval=4),
-        "6小時": mdates.HourLocator(interval=6),
-        "12小時": mdates.HourLocator(interval=12),
-        "1天": mdates.DayLocator(interval=1),
-    }
-    x_major_locator = interval_map.get(x_axis_interval, mdates.HourLocator(interval=1))
 
-    # ==== Y 軸區間設定 ====
-    pit_tt_y_axis_mode = st.sidebar.radio("PIT / TT Y 軸區間", ["Auto", "固定 0~1", "自訂 min/max"])
-    y_min_custom = None
-    y_max_custom = None
-    if pit_tt_y_axis_mode == "自訂 min/max":
-        y_min_custom = st.sidebar.number_input("自訂 Y 軸最小值", value=0.0)
-        y_max_custom = st.sidebar.number_input("自訂 Y 軸最大值", value=1.0)
+    
 
     # ==== 轉換設備狀態欄位 ====
     def convert_running_state(val):
