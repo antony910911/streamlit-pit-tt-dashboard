@@ -119,7 +119,9 @@ def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
     df = pd.read_csv(csv_filename, skiprows=2, names=combined_columns, low_memory=False, encoding=safe_encoding)
 
     timestamp_col = combined_columns[1]
-    df["Datetime"] = pd.to_datetime(df[timestamp_col], unit="s", utc=True).dt.tz_convert("Asia/Taipei").dt.tz_localize(None)
+    # 直接轉 naive Asia/Taipei → 不要加 utc=True，不要用 tz_convert → 最穩定
+    df["Datetime"] = pd.to_datetime(df[timestamp_col], unit="s") + pd.Timedelta(hours=8)
+
     df.set_index("Datetime", inplace=True)
 
     return df, combined_columns
@@ -347,8 +349,9 @@ if df_all is not None:
         else:
             print("[WARNING] All selected columns are empty after dropna, skipping set_ylim()")
 
-    # ==== X 軸區間 ====
-    ax1.set_xlim(trim_start, trim_end)
+    # ==== X 軸區間 ==== → 用完整 start_datetime ~ end_datetime
+    ax1.set_xlim(start_datetime, end_datetime)
+
 
     # ==== 標題、X、Y 軸標籤 ====
     ax1.set_xlabel("時間", fontsize=font_size + 6, labelpad=10, fontweight="bold")
