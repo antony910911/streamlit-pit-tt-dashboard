@@ -397,14 +397,14 @@ if len(equipment_cols_full) > 0:
         state_series = df_plot[col + "_running"].fillna(0).astype(int)
         change_idx = state_series.ne(state_series.shift()).cumsum()
 
-            for grp_id, grp_df in state_series.groupby(change_idx):
-                grp_state = grp_df.iloc[0]
-                grp_start_time = grp_df.index[0]
-                grp_end_time = grp_df.index[-1] + pd.Timedelta(seconds=5)
-                grp_end_time = min(grp_end_time, end_datetime)
-                color = "green" if grp_state == 1 else "red"
+        for grp_id, grp_df in state_series.groupby(change_idx):
+            grp_state = grp_df.iloc[0]
+            grp_start_time = grp_df.index[0]
+            grp_end_time = grp_df.index[-1] + pd.Timedelta(seconds=5)
+            grp_end_time = min(grp_end_time, end_datetime)
+            color = "green" if grp_state == 1 else "red"
 
-                ax2.axvspan(grp_start_time, grp_end_time,
+            ax2.axvspan(grp_start_time, grp_end_time,
                             ymin=(i+0.1)/len(equipment_cols_full),
                             ymax=(i+0.9)/len(equipment_cols_full),
                             color=color, alpha=0.3)
