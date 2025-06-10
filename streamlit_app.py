@@ -120,7 +120,7 @@ def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
 
     timestamp_col = combined_columns[1]
     # 直接轉 naive Asia/Taipei → 不要加 utc=True，不要用 tz_convert → 最穩定
-    df["Datetime"] = pd.to_datetime(df[timestamp_col], unit="s") + pd.Timedelta(hours=8)
+    df["Datetime"] = pd.to_datetime(df[timestamp_col], unit="s") + pd.Timedelta(hours=0)
 
     df.set_index("Datetime", inplace=True)
 
