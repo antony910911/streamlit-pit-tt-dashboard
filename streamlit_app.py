@@ -169,7 +169,8 @@ if df_all is not None:
     # ==== 取樣間隔 ====
     sampling_interval_display = st.sidebar.selectbox(
         "取樣間隔 (Resample)",
-        ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "15分鐘"]
+        ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "15分鐘"],
+        index=4
     )
     sampling_interval_map = {
         "5秒": "5s",
@@ -183,9 +184,11 @@ if df_all is not None:
     # ==== X 軸主刻度 ====
     x_axis_interval = st.sidebar.selectbox(
         "X 軸主刻度間距",
-        ["30分鐘", "1小時", "2小時", "3小時", "4小時", "6小時", "12小時", "1天"]
+        ["10分鐘","30分鐘", "1小時", "2小時", "3小時", "4小時", "6小時", "12小時", "1天", "7天"],
+        index=2  # 0 是 "10分鐘"
     )
     interval_map = {
+        "10分鐘": mdates.MinuteLocator(interval=10),
         "30分鐘": mdates.MinuteLocator(interval=30),
         "1小時": mdates.HourLocator(interval=1),
         "2小時": mdates.HourLocator(interval=2),
@@ -194,6 +197,7 @@ if df_all is not None:
         "6小時": mdates.HourLocator(interval=6),
         "12小時": mdates.HourLocator(interval=12),
         "1天": mdates.DayLocator(interval=1),
+        "7天": mdates.DayLocator(interval=7),
     }
     x_major_locator = interval_map.get(x_axis_interval, mdates.HourLocator(interval=1))
 
@@ -206,7 +210,7 @@ if df_all is not None:
         y_max_custom = st.sidebar.number_input("自訂 Y 軸最大值", value=1.0)
 
     # ==== 字體大小 ====
-    font_size = st.sidebar.slider("字體大小", 8, 24, 14)
+    font_size = st.sidebar.slider("字體大小", 10, 26, 18)
     line_w = st.sidebar.slider("線條粗細 (PIT/TT)", 1, 10, 2)
 
     # ==== PIT/TT 選擇 ====
@@ -236,7 +240,7 @@ if df_all is not None:
             and not any(col.lower().startswith(ex_prefix) for ex_prefix in excluded_prefixes)
         ]
     )))
-    default_equipment_cols = ["av-303a", "av-303c", "p-303a", "p-303b", "p-304a", "b-311a"]
+    default_equipment_cols = ["av-303a", "av-303c", "p-303a", "p-304a", "b-311a"]
 
     selected_equipment_prefixes = st.sidebar.multiselect("選擇設備 (可複選)", available_equipment_prefixes, default=default_equipment_cols)
 
@@ -274,22 +278,31 @@ if df_all is not None:
 
 
 
-
+    # 額外欄位：FIT-311-VOL 顯示
+    fit_col_candidates = [col for col in all_columns if col.startswith("fit-311-vol")]
+    fit_col = fit_col_candidates[0] if len(fit_col_candidates) > 0 else None
+    show_fit = st.sidebar.checkbox("顯示 fit-311-vol / 沼氣總量", value=False, key="show_fit_checkbox")
 
 
 
     # ==== 繪圖 ====
     fig, ax1 = plt.subplots(figsize=(24, 14))
 
-    df_pit_resampled = df_plot.resample(sampling_interval).agg(
-        {col: "mean" for col in pit_cols}
-    )
-    df_pit_resampled = df_pit_resampled.asfreq(sampling_interval)
+    resample_cols = pit_cols.copy()
+    if show_fit and fit_col and fit_col in df_plot.columns:
+        resample_cols.append(fit_col)
 
-    trim_delta = pd.Timedelta(minutes=5)
-    trim_start = start_datetime + trim_delta
-    trim_end = end_datetime - trim_delta
-    trim_mask = (df_pit_resampled.index >= trim_start) & (df_pit_resampled.index <= trim_end)
+    if len(resample_cols) > 0:
+        df_pit_resampled = df_plot[resample_cols].resample(sampling_interval).mean()
+        df_pit_resampled = df_pit_resampled.asfreq(sampling_interval)
+
+        trim_delta = pd.Timedelta(minutes=5)
+        trim_start = start_datetime + trim_delta
+        trim_end = end_datetime - trim_delta
+        trim_mask = (df_pit_resampled.index >= trim_start) & (df_pit_resampled.index <= trim_end)
+    else:
+        df_pit_resampled = pd.DataFrame()  # 空 df
+        trim_mask = pd.Series([False])  # 避免後面畫圖報錯
 
 
     # ==== 標題 & Y 標籤 ====
@@ -326,11 +339,12 @@ if df_all is not None:
     # 第4點：線條是否顯示 checkbox
     show_line_map = {}
     for col in pit_cols:
-        show_line = st.sidebar.checkbox(f"顯示線條 - {col}", value=True)
+        show_line = st.sidebar.checkbox(f"顯示 {col}", value=True)
         show_line_map[col] = show_line
 
     # 第5點：線條透明度
     line_alpha = st.sidebar.slider("線條透明度 (PIT/TT)", 0.0, 1.0, 1.0, step=0.05)
+
 
     # 線條顏色
     color_map_per_line = {}
@@ -339,19 +353,55 @@ if df_all is not None:
         selected_color = st.sidebar.color_picker(f"線條顏色 - {col}", default_color)
         color_map_per_line[col] = selected_color
 
-    # 畫線
+    # ==== 畫線（含 PIT/TT & FIT）====
     for col in pit_cols:
-        if show_line_map[col]:
-            ax1.plot(df_pit_resampled.index[trim_mask], df_pit_resampled[col][trim_mask],
-                    label=col,
-                    linewidth=line_w,
-                    color=color_map_per_line[col],
-                    alpha=line_alpha)
+        if show_line_map.get(col, True):
+            ax1.plot(
+                df_pit_resampled.index[trim_mask],
+                df_pit_resampled[col][trim_mask],
+                label=col,
+                linewidth=line_w,
+                color=color_map_per_line[col],
+                alpha=line_alpha
+            )
 
-    # ==== X 軸設定 ====
+    # 額外畫 fit-311-vol
+    if show_fit and fit_col in df_pit_resampled.columns:
+        ax1.plot(
+            df_pit_resampled.index[trim_mask],
+            df_pit_resampled[fit_col][trim_mask],
+            label="FIT-311-VOL / 沼氣總量",
+            linewidth=line_w + 3,
+            color="black",
+            alpha=1.0,
+            marker="o",
+            markersize=10,
+            markerfacecolor="black",
+            markeredgecolor="black",
+            markeredgewidth=1.5
+        )
+
+
+    # ==== X 軸設定 ==== (動態 DateFormatter)
     ax1.xaxis.set_major_locator(x_major_locator)
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M"))
-    plt.xticks(rotation=45, fontsize=font_size + 4)
+
+    if x_axis_interval in ["1天", "7天"]:
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))  # 只顯示月-日
+    else:
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M"))  # 顯示 月-日 時:分
+
+    tick_length = font_size * 0.5
+    tick_width = font_size * 0.05
+    
+    # X 軸
+    ax1.tick_params(axis='x', labelsize=font_size + 4, length=tick_length, width=tick_width)
+    plt.xticks(rotation=45)  # 不要再另外指定 fontsize，tick_params 已經設定好了
+
+
+    # 準備 Y 軸範圍考慮的欄位
+    y_axis_cols = pit_cols.copy()
+    if show_fit and fit_col and fit_col in df_pit_resampled.columns:
+        y_axis_cols.append(fit_col)
 
     # ==== Y 軸範圍 robust ====
     if pit_tt_y_axis_mode == "固定 0~1":
@@ -359,7 +409,7 @@ if df_all is not None:
     elif pit_tt_y_axis_mode == "自訂 min/max":
         ax1.set_ylim(y_min_custom, y_max_custom)
     else:
-        df_valid_columns = df_pit_resampled[pit_cols].dropna(axis=1, how='all')
+        df_valid_columns = df_pit_resampled[y_axis_cols].dropna(axis=1, how='all')
         if not df_valid_columns.empty:
             y_min = df_valid_columns.min().min()
             y_max = df_valid_columns.max().max()
@@ -381,8 +431,8 @@ if df_all is not None:
     ax1.set_ylabel(y_label, fontsize=font_size + 6, labelpad=10, fontweight="bold")
     ax1.set_title(plot_title, fontsize=font_size + 17, pad=70, fontweight="bold")
 
-    # ==== Y 軸刻度字體大小 ====
-    ax1.tick_params(axis='y', labelsize=font_size + 3)
+    # Y 軸
+    ax1.tick_params(axis='y', labelsize=font_size + 4, length=tick_length, width=tick_width)
 
     # ==== 圖例 ====
     # 計算有幾條線
@@ -424,10 +474,17 @@ if df_all is not None:
                 grp_end_time = min(grp_end_time, end_datetime)
                 color = "green" if grp_state == 1 else "red"
 
+                alpha_running = 0.3  # 綠色 (設備啟動)
+                alpha_stopped = 0.3  # 紅色 (設備停止 → 淡一點)
+
+                color = "green" if grp_state == 1 else "red"
+                alpha_value = alpha_running if grp_state == 1 else alpha_stopped
+                
+                
                 ax2.axvspan(grp_start_time, grp_end_time,
                                 ymin=(i+0.1)/len(equipment_cols_full),
                                 ymax=(i+0.9)/len(equipment_cols_full),
-                                color=color, alpha=0.3)
+                                color=color, alpha=0.25)
 
         ax2.set_ylim(-0.5, len(equipment_cols_full)-0.5)
         ax2.set_yticks(y_positions)
