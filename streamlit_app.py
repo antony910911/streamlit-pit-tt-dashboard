@@ -208,62 +208,42 @@ if df_all is not None:
     # ==== 字體大小 ====
     font_size = st.sidebar.slider("字體大小", 8, 24, 14)
 
-# ==== PIT/TT 選擇 + color_map 一次處理 ====
-available_pit_tt_prefixes = sorted(list(set(
-    [col.split(" / ")[0] for col in all_columns if col.startswith("pit-") or col.startswith("tt-")]
-)))
-default_pit_columns = ["pit-311a", "pit-311c", "pit-312a", "pit-312c"]
+    # ==== PIT/TT 選擇 ====
+    available_pit_tt_prefixes = sorted(list(set(
+        [col.split(" / ")[0] for col in all_columns if col.startswith("pit-") or col.startswith("tt-")]
+    )))
+    default_pit_columns = ["pit-311a", "pit-311c", "pit-312a", "pit-312c"]
 
-selected_pit_tt_prefixes = st.sidebar.multiselect(
-    "選擇 PIT / TT 欄位 (可複選)",
-    available_pit_tt_prefixes,
-    default=default_pit_columns
-)
+    selected_pit_tt_prefixes = st.sidebar.multiselect(
+        "選擇 PIT / TT 欄位 (可複選)",
+        available_pit_tt_prefixes,
+        default=default_pit_columns
+    )
 
-# 預設顏色表
-default_colors = [
-    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
-    "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
-    "#bcbd22", "#17becf"
-]
-
-# 線條粗細
-line_width = st.sidebar.slider("線條粗細", 1, 10, 2)
-
-# 處理 PIT/TT 欄位 + color_map
-pit_tt_columns_full = []
-color_map_per_line = {}
-for i, col_prefix in enumerate(selected_pit_tt_prefixes):
-    matched_cols = [col for col in all_columns if col.startswith(col_prefix)]
-    if matched_cols:
-        full_col = matched_cols[0]
+    pit_tt_columns_full = []
+    for col_prefix in selected_pit_tt_prefixes:
+        full_col = [col for col in all_columns if col.startswith(col_prefix)][0]
         pit_tt_columns_full.append(full_col)
-        default_color = default_colors[i % len(default_colors)]
-        selected_color = st.sidebar.color_picker(f"線條顏色 - {full_col}", default_color)
-        color_map_per_line[full_col] = selected_color
 
-# ==== 設備選擇 + fallback 處理 ====
-excluded_prefixes = ["id", "time", "date", "timestamp"]
-available_equipment_prefixes = sorted(list(set(
-    [
-        col.split(" / ")[0]
-        for col in all_columns
-        if not (col.startswith("pit-") or col.startswith("tt-"))
-        and not any(col.lower().startswith(ex_prefix) for ex_prefix in excluded_prefixes)
-    ]
-)))
-default_equipment_cols = ["av-303a", "av-303c", "p-303a", "p-303b", "p-304a", "b-311a"]
+    # ==== 設備選擇 ====
+    excluded_prefixes = ["id", "time", "date", "timestamp"]
+    available_equipment_prefixes = sorted(list(set(
+        [
+            col.split(" / ")[0]
+            for col in all_columns
+            if not (col.startswith("pit-") or col.startswith("tt-"))
+            and not any(col.lower().startswith(ex_prefix) for ex_prefix in excluded_prefixes)
+        ]
+    )))
+    default_equipment_cols = ["av-303a", "av-303c", "p-303a", "p-303b", "p-304a", "b-311a"]
 
-selected_equipment_prefixes = st.sidebar.multiselect(
-    "選擇設備 (可複選)", available_equipment_prefixes, default=default_equipment_cols
-)
+    selected_equipment_prefixes = st.sidebar.multiselect("選擇設備 (可複選)", available_equipment_prefixes, default=default_equipment_cols)
 
-equipment_cols_full = []
-for col_prefix in selected_equipment_prefixes:
-    matched_cols = [col for col in all_columns if col.startswith(col_prefix)]
-    if matched_cols:
-        full_col = matched_cols[0]
+    equipment_cols_full = []
+    for col_prefix in selected_equipment_prefixes:
+        full_col = [col for col in all_columns if col.startswith(col_prefix)][0]
         equipment_cols_full.append(full_col)
+
 
 
     
