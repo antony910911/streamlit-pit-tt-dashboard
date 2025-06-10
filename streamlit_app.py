@@ -1,3 +1,5 @@
+# streamlit_app.py - 完整修正版 Part 1
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -7,39 +9,32 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import time
-
-
 import matplotlib.font_manager as fm
-import matplotlib.pyplot as plt
+import pytz
 
-font_path = "NotoSansTC-Regular.ttf"  # 你把 NotoSansTC-Regular.ttf 放在 repo 的 fonts/ 資料夾
-font_prop = fm.FontProperties(fname=font_path)
+# ==== 強制字型設定 ====
+try:
+    font_path = "fonts/NotoSansTC-Regular.ttf"
+    font_prop = fm.FontProperties(fname=font_path)
+    plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
+except Exception as e:
+    print(f"[WARNING] 找不到字型，Fallback，Exception: {e}")
+    plt.rcParams['font.sans-serif'] = ['sans-serif', 'Heiti TC', 'Arial Unicode MS', 'Microsoft JhengHei']
 
-plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
-plt.rcParams['axes.unicode_minus'] = False
-
-# ==== 字型設定，避免中文亂碼 ====
-plt.rcParams['font.sans-serif'] = ['Heiti TC', 'Arial Unicode MS', 'Microsoft JhengHei', 'sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
 
 # ==== 自動爬 CSV 函數 ====
 def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
     import datetime
-    import requests
-    import time
-    import pandas as pd
     import chardet
     import zipfile
-    import io
 
-    # === 1️⃣ 時間轉 Epoch 秒數 ===
     start_datetime_obj = datetime.datetime.combine(start_date, start_time)
     end_datetime_obj = datetime.datetime.combine(end_date, end_time)
 
     startEpoch = int(start_datetime_obj.timestamp())
     endEpoch = int(end_datetime_obj.timestamp())
 
-    # === 2️⃣ 定義 URL 和 payload ===
     query_url = "https://ah2e-txi.barn-pence.ts.net/csvquery"
     query_payload = {
         'startEpoch': startEpoch,
@@ -48,8 +43,6 @@ def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
     }
 
     session = requests.Session()
-
-    # === 3️⃣ 設定標準 Header ===
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
         "Referer": "https://main.d1iku9uvtgtqdy.amplifyapp.com/",
@@ -59,81 +52,41 @@ def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
         "X-Requested-With": "XMLHttpRequest",
     })
 
-    # === 4️⃣ 發送 POST /csvquery → 建立任務 ===
-    print(f"\n=== 發送 POST /csvquery ===")
-    print(f"URL: {query_url}")
-    print(f"Payload: {query_payload}")
-
     resp = session.post(query_url, json=query_payload)
+    resp_json = resp.json()
+    job_id = resp_json["jobId"]
 
-    print(f"\n=== Response from /csvquery ===")
-    print(f"Status Code: {resp.status_code}")
-    print(f"Content (前 500 字): {resp.text[:500]}")
-
-    # === 5️⃣ 嘗試解析 job id ===
-    try:
-        resp_json = resp.json()
-        if "jobId" in resp_json:
-            job_id = resp_json["jobId"]
-            print(f"✅ 取得 job id: {job_id}")
-        else:
-            raise KeyError("Response JSON 裡沒有 'jobId' 欄位，請確認 Response 結構")
-    except Exception as e:
-        print(f"\n⚠️ 解析 JSON 失敗！Exception: {e}")
-        print(f"Response Content 開頭: {resp.text[:500]}")
-        raise e
-
-    # === 6️⃣ 輪詢任務狀態 ===
     task_list_url = f"https://ah2e-txi.barn-pence.ts.net/query-status?job={job_id}"
-    print(f"\n組成 task_list_url: {task_list_url}")
 
     download_url = None
     with st.spinner("等待任務完成..."):
         while True:
             resp = session.get(task_list_url)
-            print(f"\n=== Response from /query-status ===")
-            print(f"Status Code: {resp.status_code}")
-            print(f"Content (前 500 字): {resp.text[:500]}")
+            status_json = resp.json()
+            task_status = status_json.get("status", "unknown")
 
-            try:
-                status_json = resp.json()
-                task_status = status_json.get("status", "unknown")
-                print(f"任務狀態: {task_status}")
+            if task_status == "done":
+                download_url = status_json["url"]
+                break
+            elif task_status == "error":
+                raise Exception("任務失敗")
+            else:
+                time.sleep(2)
 
-                if task_status == "done":
-                    download_url = status_json["url"]
-                    print(f"✅ 任務完成！下載連結: {download_url}")
-                    break
-                elif task_status == "error":
-                    print(f"❌ 任務失敗！請檢查參數是否正確")
-                    raise Exception("任務失敗")
-                else:
-                    time.sleep(2)
-            except Exception as e:
-                print(f"\n⚠️ 任務狀態解析失敗！Exception: {e}")
-                print(f"Response Content: {resp.text}")
-                raise e
-
-    # === 7️⃣ 下載檔案 ===
     if download_url.startswith("/"):
         download_url = "https://ah2e-txi.barn-pence.ts.net" + download_url
 
-    # === 8️⃣ 判斷 zip or csv ===
     if download_url.endswith(".zip"):
-        print("⚠️ 偵測到 ZIP 檔，進行解壓縮！")
         zip_resp = session.get(download_url)
         zip_filename = "downloaded_data.zip"
         with open(zip_filename, 'wb') as f:
             f.write(zip_resp.content)
 
-        # 解壓縮 → 取第一個 .csv
         with zipfile.ZipFile(zip_filename, 'r') as zip_ref:
             csv_inside_name = [name for name in zip_ref.namelist() if name.endswith(".csv")][0]
-            print(f"解壓出內部檔案：{csv_inside_name}")
             zip_ref.extract(csv_inside_name, ".")
             csv_filename = csv_inside_name
     else:
-        print(f"\n即將下載 CSV: {download_url}")
         csv_resp = session.get(download_url)
         csv_filename = "downloaded_data.csv"
         with open(csv_filename, 'wb') as f:
@@ -141,19 +94,12 @@ def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
 
     st.success(f"✅ 資料下載完成：{csv_filename}")
 
-    # === 9️⃣ 偵測編碼 ===
     with open(csv_filename, 'rb') as f_detect:
         raw_data = f_detect.read(500)
         result = chardet.detect(raw_data)
         detected_encoding = result['encoding']
-        print(f"檢測到檔案編碼：{detected_encoding}")
+        safe_encoding = detected_encoding or "utf-8-sig"
 
-    safe_encoding = detected_encoding
-    if safe_encoding is None or safe_encoding.lower() in ["ascii", "charmap", "windows-1252", "cp1252", "cp1254"]:
-        print("⚠️ 偵測到可能不穩定的編碼，強制改用 utf-8-sig 嘗試")
-        safe_encoding = "utf-8-sig"
-
-    # === 10️⃣ 讀 header 2 行 ===
     with open(csv_filename, 'r', encoding=safe_encoding) as f:
         line1 = f.readline().strip().split(",")
         line2 = f.readline().strip().split(",")
@@ -162,20 +108,13 @@ def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
         line2 += [""] * (max_len - len(line2))
         combined_columns = [f"{eng.strip()} / {chi.strip()}" if chi.strip() else eng.strip() for eng, chi in zip(line1, line2)]
 
-    # === 11️⃣ 用 pandas 讀剩下 ===
     df = pd.read_csv(csv_filename, skiprows=2, names=combined_columns, low_memory=False, encoding=safe_encoding)
 
-    # === 12️⃣ 時間轉換 ===
     timestamp_col = combined_columns[1]
     df["Datetime"] = pd.to_datetime(df[timestamp_col], unit="s", utc=True).dt.tz_convert("Asia/Taipei").dt.tz_localize(None)
     df.set_index("Datetime", inplace=True)
 
     return df, combined_columns
-
-
-
-
-
 # ==== 初始化 Session State ====
 if "df_all" not in st.session_state:
     st.session_state.df_all = None
@@ -214,7 +153,7 @@ query_end_time = st.session_state.query_end_time
 if df_all is not None:
     st.sidebar.title("🖌️ 圖表設定")
 
-    # ==== 取樣間隔 ====（新增！）
+    # ==== 取樣間隔 ====
     sampling_interval_display = st.sidebar.selectbox(
         "取樣間隔 (Resample)",
         ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "15分鐘"]
@@ -228,7 +167,6 @@ if df_all is not None:
         "15分鐘": "15min",
     }
     sampling_interval = sampling_interval_map[sampling_interval_display]
-
 
     # ==== PIT/TT 選擇 ====
     available_pit_tt_prefixes = sorted(list(set(
@@ -246,31 +184,9 @@ if df_all is not None:
     for col_prefix in selected_pit_tt_prefixes:
         full_col = [col for col in all_columns if col.startswith(col_prefix)][0]
         pit_tt_columns_full.append(full_col)
-    
-   # ==== 預設顏色表（你也可以自己換）====
-    default_colors = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
-        "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
-        "#bcbd22", "#17becf"
-    ]
-
-    # ==== PIT/TT 線條設定 ====
-    line_width = st.sidebar.slider("線條粗細", 1, 10, 2)
-
-    # 預設色 assign 給選到的 pit_tt_columns_full
-    color_map_per_line = {}
-    for i, col in enumerate(pit_tt_columns_full):
-        default_color = default_colors[i % len(default_colors)]
-        selected_color = st.sidebar.color_picker(f"線條顏色 - {col}", default_color)
-        color_map_per_line[col] = selected_color
-
-
-
-
-    # 要排除掉的欄位 prefix
-    excluded_prefixes = ["id", "time", "date", "timestamp"]
 
     # ==== 設備選擇 ====
+    excluded_prefixes = ["id", "time", "date", "timestamp"]
     available_equipment_prefixes = sorted(list(set(
         [
             col.split(" / ")[0]
@@ -316,8 +232,6 @@ if df_all is not None:
         y_min_custom = st.sidebar.number_input("自訂 Y 軸最小值", value=0.0)
         y_max_custom = st.sidebar.number_input("自訂 Y 軸最大值", value=1.0)
 
-   
-
     # ==== 轉換設備狀態欄位 ====
     def convert_running_state(val):
         val_str = str(val).strip().replace("'", "")
@@ -330,8 +244,7 @@ if df_all is not None:
     for col in equipment_cols_full:
         df_all[col + "_running"] = df_all[col].apply(convert_running_state)
 
-    # ==== 時間區段用查詢時的時間固定 ====
-    import pytz
+    # ==== 修正版 df_plot（時區一致，不差 8 小時）====
     tz = pytz.timezone('Asia/Taipei')
     start_datetime = pd.to_datetime(f"{query_start_date} {query_start_time}")
     start_datetime = tz.localize(start_datetime).tz_convert('Asia/Taipei').tz_localize(None)
@@ -340,37 +253,14 @@ if df_all is not None:
     end_datetime = tz.localize(end_datetime).tz_convert('Asia/Taipei').tz_localize(None)
 
     df_plot = df_all.loc[(df_all.index >= start_datetime) & (df_all.index <= end_datetime)]
-
     st.write(f"✅ 擷取時間段：{start_datetime} ～ {end_datetime}，總筆數：{len(df_plot)}")
-
     # ==== PIT/TT 欄位轉 full name ====
     pit_tt_columns_full = []
     for col_prefix in selected_pit_tt_prefixes:
         full_col = [col for col in all_columns if col.startswith(col_prefix)][0]
         pit_tt_columns_full.append(full_col)
 
-   
     # ==== 繪圖 ====
-    # ==== 繪圖 ==== (整段新版)
-    import matplotlib.font_manager as fm
-
-    # ==== 字型設定，避免中文亂碼 ====
-    try:
-        font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
-        font_prop = fm.FontProperties(fname=font_path)
-        plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
-    except Exception as e:
-        print(f"[WARNING] 沒找到 NotoSansCJK-Regular.ttc，改用內建 fallback，Exception: {e}")
-        plt.rcParams['font.sans-serif'] = ['sans-serif', 'Heiti TC', 'Arial Unicode MS', 'Microsoft JhengHei']
-    plt.rcParams['axes.unicode_minus'] = False
-
-    # ==== 時區處理 ==== → 保證 X 軸正確
-    import pytz
-    tz = pytz.timezone('Asia/Taipei')
-    start_datetime = pd.to_datetime(f"{query_start_date} {query_start_time}").tz_localize(tz).tz_convert(tz).tz_localize(None)
-    end_datetime = pd.to_datetime(f"{query_end_date} {query_end_time}").tz_localize(tz).tz_convert(tz).tz_localize(None)
-
-    # ==== 繪圖開始 ====
     fig, ax1 = plt.subplots(figsize=(24, 14))
 
     df_pit_resampled = df_plot.resample(sampling_interval).agg(
@@ -408,10 +298,22 @@ if df_all is not None:
         plot_title = plot_title.replace("趨勢圖", "趨勢及設備起停圖")
 
     # ==== PIT/TT 趨勢線圖 ====
+    default_colors = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+        "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+        "#bcbd22", "#17becf"
+    ]
+
+    color_map_per_line = {}
+    for i, col in enumerate(pit_tt_columns_full):
+        default_color = default_colors[i % len(default_colors)]
+        selected_color = st.sidebar.color_picker(f"線條顏色 - {col}", default_color)
+        color_map_per_line[col] = selected_color
+
     for col in pit_tt_columns_full:
         ax1.plot(df_pit_resampled.index[trim_mask], df_pit_resampled[col][trim_mask],
                 label=col,
-                linewidth=line_width,
+                linewidth=2,
                 color=color_map_per_line[col])
 
     # ==== X 軸設定 ====
@@ -419,7 +321,7 @@ if df_all is not None:
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M"))
     plt.xticks(rotation=45, fontsize=font_size + 4)
 
-    # ==== Y 軸範圍 (新版，robust 不會崩) ====
+    # ==== Y 軸範圍 robust ====
     if pit_tt_y_axis_mode == "固定 0~1":
         ax1.set_ylim(0, 1)
     elif pit_tt_y_axis_mode == "自訂 min/max":
@@ -456,8 +358,7 @@ if df_all is not None:
         ncol=4,
         fontsize=font_size + 4
     )
-
-    # ==== 設備起停圖 ====
+    # ==== 設備啟停圖 ====
     if len(equipment_cols_full) > 0:
         ax2 = ax1.twinx()
         y_positions = np.arange(len(equipment_cols_full))
