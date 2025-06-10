@@ -208,42 +208,62 @@ if df_all is not None:
     # ==== 字體大小 ====
     font_size = st.sidebar.slider("字體大小", 8, 24, 14)
 
-    # ==== PIT/TT 選擇 ====
-    available_pit_tt_prefixes = sorted(list(set(
-        [col.split(" / ")[0] for col in all_columns if col.startswith("pit-") or col.startswith("tt-")]
-    )))
-    default_pit_columns = ["pit-311a", "pit-311c", "pit-312a", "pit-312c"]
+# ==== PIT/TT 選擇 + color_map 一次處理 ====
+available_pit_tt_prefixes = sorted(list(set(
+    [col.split(" / ")[0] for col in all_columns if col.startswith("pit-") or col.startswith("tt-")]
+)))
+default_pit_columns = ["pit-311a", "pit-311c", "pit-312a", "pit-312c"]
 
-    selected_pit_tt_prefixes = st.sidebar.multiselect(
-        "選擇 PIT / TT 欄位 (可複選)",
-        available_pit_tt_prefixes,
-        default=default_pit_columns
-    )
+selected_pit_tt_prefixes = st.sidebar.multiselect(
+    "選擇 PIT / TT 欄位 (可複選)",
+    available_pit_tt_prefixes,
+    default=default_pit_columns
+)
 
-    pit_tt_columns_full = []
-    for col_prefix in selected_pit_tt_prefixes:
-        full_col = [col for col in all_columns if col.startswith(col_prefix)][0]
+# 預設顏色表
+default_colors = [
+    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+    "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+    "#bcbd22", "#17becf"
+]
+
+# 線條粗細
+line_width = st.sidebar.slider("線條粗細", 1, 10, 2)
+
+# 處理 PIT/TT 欄位 + color_map
+pit_tt_columns_full = []
+color_map_per_line = {}
+for i, col_prefix in enumerate(selected_pit_tt_prefixes):
+    matched_cols = [col for col in all_columns if col.startswith(col_prefix)]
+    if matched_cols:
+        full_col = matched_cols[0]
         pit_tt_columns_full.append(full_col)
+        default_color = default_colors[i % len(default_colors)]
+        selected_color = st.sidebar.color_picker(f"線條顏色 - {full_col}", default_color)
+        color_map_per_line[full_col] = selected_color
 
-    # ==== 設備選擇 ====
-    excluded_prefixes = ["id", "time", "date", "timestamp"]
-    available_equipment_prefixes = sorted(list(set(
-        [
-            col.split(" / ")[0]
-            for col in all_columns
-            if not (col.startswith("pit-") or col.startswith("tt-"))
-            and not any(col.lower().startswith(ex_prefix) for ex_prefix in excluded_prefixes)
-        ]
-    )))
-    default_equipment_cols = ["av-303a", "av-303c", "p-303a", "p-303b", "p-304a", "b-311a"]
+# ==== 設備選擇 + fallback 處理 ====
+excluded_prefixes = ["id", "time", "date", "timestamp"]
+available_equipment_prefixes = sorted(list(set(
+    [
+        col.split(" / ")[0]
+        for col in all_columns
+        if not (col.startswith("pit-") or col.startswith("tt-"))
+        and not any(col.lower().startswith(ex_prefix) for ex_prefix in excluded_prefixes)
+    ]
+)))
+default_equipment_cols = ["av-303a", "av-303c", "p-303a", "p-303b", "p-304a", "b-311a"]
 
-    selected_equipment_prefixes = st.sidebar.multiselect("選擇設備 (可複選)", available_equipment_prefixes, default=default_equipment_cols)
+selected_equipment_prefixes = st.sidebar.multiselect(
+    "選擇設備 (可複選)", available_equipment_prefixes, default=default_equipment_cols
+)
 
-    equipment_cols_full = []
-    for col_prefix in selected_equipment_prefixes:
-        full_col = [col for col in all_columns if col.startswith(col_prefix)][0]
+equipment_cols_full = []
+for col_prefix in selected_equipment_prefixes:
+    matched_cols = [col for col in all_columns if col.startswith(col_prefix)]
+    if matched_cols:
+        full_col = matched_cols[0]
         equipment_cols_full.append(full_col)
-
 
 
     
@@ -274,17 +294,10 @@ if df_all is not None:
         full_col = [col for col in all_columns if col.startswith(col_prefix)][0]
         pit_tt_columns_full.append(full_col)
 
-
 # ==== 繪圖（允許只畫設備啟停圖）====
 fig, ax1 = plt.subplots(figsize=(24, 14))
 
-# ==== 初始化線條顏色設定（可讓使用者自訂每條線顏色）====
-color_map_per_line = {}
-for i, col in enumerate(pit_tt_columns_full):
-    default_color = plt.cm.tab10(i % 10)
-    selected_color = st.sidebar.color_picker(f"線條顏色 - {col}", '#%02x%02x%02x' % tuple(int(255*x) for x in default_color[:3]))
-    color_map_per_line[col] = selected_color
-
+# ==== 有選 PIT/TT 才畫趨勢圖 ====
 if len(pit_tt_columns_full) > 0:
     df_pit_resampled = df_plot.resample(sampling_interval).agg(
         {col: "mean" for col in pit_tt_columns_full}
@@ -296,10 +309,14 @@ if len(pit_tt_columns_full) > 0:
     trim_end = end_datetime - trim_delta
     trim_mask = (df_pit_resampled.index >= trim_start) & (df_pit_resampled.index <= trim_end)
 
-    # ==== 標題 & Y 標籤 ====
+    # 標題 & Y 標籤
     sampling_interval_display_map = {
-        "5s": "5 秒", "10s": "10 秒", "30s": "30 秒",
-        "1min": "1 分鐘", "5min": "5 分鐘", "15min": "15 分鐘",
+        "5s": "5 秒",
+        "10s": "10 秒",
+        "30s": "30 秒",
+        "1min": "1 分鐘",
+        "5min": "5 分鐘",
+        "15min": "15 分鐘",
     }
     sampling_interval_display = sampling_interval_display_map.get(sampling_interval, sampling_interval)
 
@@ -316,7 +333,7 @@ if len(pit_tt_columns_full) > 0:
     if len(equipment_cols_full) > 0:
         plot_title = plot_title.replace("趨勢圖", "趨勢及設備起停圖")
 
-    # ==== 畫線 ====
+    # 趨勢線
     for col in pit_tt_columns_full:
         ax1.plot(df_pit_resampled.index[trim_mask], df_pit_resampled[col][trim_mask],
                  label=col,
@@ -327,6 +344,7 @@ if len(pit_tt_columns_full) > 0:
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M"))
     plt.xticks(rotation=45, fontsize=font_size + 4)
 
+    # Y 軸範圍
     if pit_tt_y_axis_mode == "固定 0~1":
         ax1.set_ylim(0, 1)
     elif pit_tt_y_axis_mode == "自訂 min/max":
@@ -340,12 +358,13 @@ if len(pit_tt_columns_full) > 0:
                 ax1.set_ylim(y_min * 0.95, y_max * 1.05)
 
     ax1.set_xlim(start_datetime, end_datetime)
+
     ax1.set_xlabel("時間", fontsize=font_size + 6, labelpad=10, fontweight="bold")
     ax1.set_ylabel(y_label, fontsize=font_size + 6, labelpad=10, fontweight="bold")
     ax1.set_title(plot_title, fontsize=font_size + 17, pad=70, fontweight="bold")
     ax1.tick_params(axis='y', labelsize=font_size + 3)
 
-    # ==== 圖例動態位置 ====
+    # 圖例
     num_lines = len(pit_tt_columns_full)
     ncol = min(num_lines, 4)
     num_rows = int(np.ceil(num_lines / ncol))
@@ -361,44 +380,39 @@ if len(pit_tt_columns_full) > 0:
     plt.subplots_adjust(top=top_adjust)
 
 else:
-    # 沒選 PIT/TT，空主圖 + title
+    # ==== 沒選 PIT/TT，畫空主圖 ====
     ax1.set_title("設備啟停圖（未選擇 PIT / TT 趨勢圖）", fontsize=font_size + 17, pad=70, fontweight="bold")
     ax1.set_xlim(start_datetime, end_datetime)
     ax1.set_xlabel("時間", fontsize=font_size + 6, labelpad=10, fontweight="bold")
     ax1.set_yticks([])
     ax1.set_yticklabels([])
 
-
-
 # ==== 設備啟停圖 ====
 if len(equipment_cols_full) > 0:
-        ax2 = ax1.twinx()
-        y_positions = np.arange(len(equipment_cols_full))
+    ax2 = ax1.twinx()
+    y_positions = np.arange(len(equipment_cols_full))
 
-        for i, col in enumerate(equipment_cols_full):
-            state_series = df_plot[col + "_running"].fillna(0).astype(int)
-            change_idx = state_series.ne(state_series.shift()).cumsum()
+    for i, col in enumerate(equipment_cols_full):
+        state_series = df_plot[col + "_running"].fillna(0).astype(int)
+        change_idx = state_series.ne(state_series.shift()).cumsum()
 
-            for grp_id, grp_df in state_series.groupby(change_idx):
-                grp_state = grp_df.iloc[0]
-                grp_start_time = grp_df.index[0]
-                grp_end_time = grp_df.index[-1] + pd.Timedelta(seconds=5)
-                grp_end_time = min(grp_end_time, end_datetime)
-                color = "green" if grp_state == 1 else "red"
+        for grp_id, grp_df in state_series.groupby(change_idx):
+            grp_state = grp_df.iloc[0]
+            grp_start_time = grp_df.index[0]
+            grp_end_time = grp_df.index[-1] + pd.Timedelta(seconds=5)
+            grp_end_time = min(grp_end_time, end_datetime)
+            color = "green" if grp_state == 1 else "red"
 
-                ax2.axvspan(grp_start_time, grp_end_time,
-                                ymin=(i+0.1)/len(equipment_cols_full),
-                                ymax=(i+0.9)/len(equipment_cols_full),
-                                color=color, alpha=0.3)
+            ax2.axvspan(grp_start_time, grp_end_time,
+                        ymin=(i+0.1)/len(equipment_cols_full),
+                        ymax=(i+0.9)/len(equipment_cols_full),
+                        color=color, alpha=0.3)
 
-        ax2.set_ylim(-0.5, len(equipment_cols_full)-0.5)
-        ax2.set_yticks(y_positions)
-        ax2.set_yticklabels(equipment_cols_full, fontsize=font_size + 4)
-        ax2.set_ylabel("設備運作狀態", fontsize=font_size + 6)
+    ax2.set_ylim(-0.5, len(equipment_cols_full)-0.5)
+    ax2.set_yticks(y_positions)
+    ax2.set_yticklabels(equipment_cols_full, fontsize=font_size + 4)
+    ax2.set_ylabel("設備運作狀態", fontsize=font_size + 6)
 
 # ==== 完成圖表繪製 ====
 plt.tight_layout()
 st.pyplot(fig, use_container_width=True)
-
-
-
