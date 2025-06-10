@@ -367,10 +367,11 @@ if df_all is not None:
     # ==== 圖例 ====
     fig.legend(
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.92),
+        bbox_to_anchor=(0.5, 1.05),  # 調到圖框外
         ncol=4,
         fontsize=font_size + 4
     )
+
     # ==== 設備啟停圖 ====
     if len(equipment_cols_full) > 0:
         ax2 = ax1.twinx()
