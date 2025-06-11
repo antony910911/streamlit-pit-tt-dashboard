@@ -205,8 +205,6 @@ with tabs[1]:
     # 🚀 這一行 → 強制跳到分析功能 tab
         st.experimental_set_query_params(tab="分析功能")
 
-            # ⭐ 可以加一個成功訊息
-        st.success("✅ 資料查詢完成，已自動切換至分析功能頁！")
 
     # 用 session_state 的資料
     df_all = st.session_state.get("df_all")
