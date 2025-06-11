@@ -11,6 +11,28 @@ from bs4 import BeautifulSoup
 import time
 import matplotlib.font_manager as fm
 import pytz
+import streamlit as st
+
+# 首頁標題
+st.title("台以乾式厭氧醱酵數據分析")
+
+# 使用說明
+st.markdown("""
+### 使用說明
+歡迎使用本應用程式！  
+以下是基本操作指南：
+
+1. 在左邊側邊欄選擇時間區間  
+2. 選擇需要分析的欄位，TT、PIT、設備等  
+3. 調整圖表顯示參數  
+4. 查看結果並存檔 🎉
+
+**注意事項：**  
+- 查詢時間區間需大於20分鐘才看的到圖喔(因程式預設掐頭去尾各5分鐘)
+
+---
+""")
+
 
 # ==== 強制字型設定 ====
 import matplotlib.font_manager as fm
