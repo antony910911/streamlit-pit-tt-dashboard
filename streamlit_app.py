@@ -153,8 +153,17 @@ st.set_page_config(
 
 
 
-# ==== Tabs ====
-tabs = st.tabs(["首頁", "分析功能"])
+# ==== Tabs ==== 加上 query_params 控制目前在哪個 tab
+query_params = st.experimental_get_query_params()
+selected_tab = query_params.get("tab", ["首頁"])[0]
+
+tab_names = ["首頁", "分析功能"]
+tab_idx = tab_names.index(selected_tab) if selected_tab in tab_names else 0
+
+tabs = st.tabs(tab_names)
+
+# 寫回目前 tab (保持同步，讓手動點 tab 也會寫入網址)
+st.experimental_set_query_params(tab=tab_names[tab_idx])
 
 # ==== 首頁 ====
 with tabs[0]:
@@ -193,6 +202,11 @@ with tabs[1]:
         st.session_state.query_start_time = start_time
         st.session_state.query_end_date = end_date
         st.session_state.query_end_time = end_time
+    # 🚀 這一行 → 強制跳到分析功能 tab
+        st.experimental_set_query_params(tab="分析功能")
+
+            # ⭐ 可以加一個成功訊息
+        st.success("✅ 資料查詢完成，已自動切換至分析功能頁！")
 
     # 用 session_state 的資料
     df_all = st.session_state.get("df_all")
