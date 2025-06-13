@@ -665,7 +665,7 @@ with tabs[2]:
                     print(f"[INFO] 使用 上傳CSV 讀取氣溫 → {uploaded_file.name}")
                     return df_weather
 
-            except Exception as e:
+           except Exception as e:
                 st.error(f"❌ 氣溫CSV檔格式錯誤，無法讀取！錯誤訊息: {e}")
                 print(f"[ERROR] 讀CSV失敗: {e}")
                 return pd.DataFrame()
