@@ -630,7 +630,7 @@ with tabs[2]:
         # Resample取樣間隔
         sampling_interval_display = st.sidebar.selectbox(
             "取樣間隔 (Resample)",
-            ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "15分鐘"],
+            ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "10分鐘", "15分鐘"],
             index=4
         )
         sampling_interval_map = {
