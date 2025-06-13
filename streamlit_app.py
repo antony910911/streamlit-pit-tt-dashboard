@@ -568,10 +568,68 @@ with tabs[1]:
 
 
 with tabs[2]:
-    st.title("📅 PIT/TT 日對日比對 (時間表示版 + 快速Resample)")
+    st.title("📅 PIT/TT 日對日比對 (時間表示版 + 快速Resample + 柳營八翁氣溫 + 雙Y軸可選)")
 
     import random
     import matplotlib.dates as mdates
+    import requests
+    from datetime import timedelta
+
+    # ==== 氣象API設定 ====
+    WEATHER_API_KEY = "CWA-FA8592C7-36CC-4425-AEC4-42B887D0504B"
+
+    def fetch_weather_temperature(date_str):
+        station_id = "C1A660"
+        api_key = WEATHER_API_KEY
+
+        date_obj = pd.to_datetime(date_str)
+        time_from = date_obj.strftime("%Y-%m-%dT00:00:00")
+        time_to = (date_obj + timedelta(days=1) - timedelta(seconds=1)).strftime("%Y-%m-%dT23:59:59")
+
+        url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001"
+
+        params = {
+            "Authorization": api_key,
+            "stationId": station_id,
+            "elementName": "TEMP",
+            "timeFrom": time_from,
+            "timeTo": time_to
+        }
+
+        response = requests.get(url, params=params)
+        data = response.json()
+
+        records = data.get("records", {}).get("location", [])
+        if not records:
+            print(f"[ERROR] API 回傳無資料 for {station_id} {date_str}")
+            return pd.DataFrame()
+
+        record = records[0]
+        obs_times = []
+        temps = []
+
+        weather_elements = record.get("weatherElement", [])
+
+        for elem in weather_elements:
+            if elem["elementName"] == "TEMP":
+                temp_data = elem.get("time", [])
+                for item in temp_data:
+                    obs_times.append(pd.to_datetime(item["dataTime"]))
+                    temp_val = item["elementValue"]["value"]
+                    temps.append(float(temp_val) if temp_val != "-99" else None)
+
+        df_weather = pd.DataFrame({
+            "ObsTime": obs_times,
+            "TEMP": temps
+        })
+
+        df_weather["Time_dt"] = df_weather["ObsTime"].map(
+            lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+        )
+
+        df_weather = df_weather.sort_values("Time_dt")
+
+        return df_weather
 
     # ==== 線條預設顏色列表（和Tab1一致）====
     default_colors = [
@@ -647,6 +705,15 @@ with tabs[2]:
         # 線條粗細 → 全局一個 slider
         global_line_width = st.sidebar.slider("線條粗細 (全部線)", 1, 10, 2)
 
+        # 字體大小 → 全局一個 slider，預設 18
+        font_size = st.sidebar.slider("字體大小 (圖表)", 10, 30, 18)
+
+        # 氣溫曲線 → 是否顯示
+        show_weather = st.sidebar.checkbox("顯示柳營八翁氣溫曲線", value=True)
+
+        # 氣溫曲線 → 是否用右Y軸
+        weather_right_yaxis = st.sidebar.checkbox("氣溫曲線用右側 Y 軸", value=True)
+
         # 初始化 color_per_date (順序指定)
         color_per_date = st.session_state.tab3_color_per_date
         for i, date_str in enumerate(selected_dates):
@@ -664,7 +731,10 @@ with tabs[2]:
 
         # ==== 開始比對 ====
         if st.button("🚀 開始比對") and len(selected_dates) > 0:
-            fig, ax = plt.subplots(figsize=(20, 10))
+            fig, ax1 = plt.subplots(figsize=(20, 10))
+            ax2 = None
+            if show_weather and weather_right_yaxis:
+                ax2 = ax1.twinx()
 
             for date_str in selected_dates:
                 date_obj = pd.to_datetime(date_str).date()
@@ -697,8 +767,8 @@ with tabs[2]:
 
                 df_day_resampled = df_day_resampled.sort_values("Time_dt")
 
-                # 畫線
-                ax.plot(
+                # 畫 PIT/TT 線
+                ax1.plot(
                     df_day_resampled["Time_dt"],
                     df_day_resampled[full_col],
                     label=f"{date_str}",
@@ -706,24 +776,52 @@ with tabs[2]:
                     color=color_per_date[date_str]
                 )
 
-            # 繪圖設定
-            ax.set_xlabel("時間 (HH:MM)", fontsize=16)
-            ax.set_ylabel(full_col, fontsize=16)
-            ax.set_title(f"不同日期同一時間比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})", fontsize=20)
-            ax.legend(fontsize=14)
-            ax.grid(True)
+                # 氣溫線
+                if show_weather:
+                    df_weather = fetch_weather_temperature(date_str)
+                    if not df_weather.empty:
+                        if weather_right_yaxis and ax2:
+                            ax2.plot(
+                                df_weather["Time_dt"],
+                                df_weather["TEMP"],
+                                label=f"{date_str} 氣溫",
+                                linewidth=2,
+                                linestyle="--",
+                                color="black"
+                            )
+                        else:
+                            ax1.plot(
+                                df_weather["Time_dt"],
+                                df_weather["TEMP"],
+                                label=f"{date_str} 氣溫",
+                                linewidth=2,
+                                linestyle="--",
+                                color="black"
+                            )
 
-            # X軸時間顯示
-            ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-            ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
-            ax.set_xlim(pd.Timestamp("2000-01-01 00:00"), pd.Timestamp("2000-01-01 23:59"))
+            # X軸設定
+            ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+            ax1.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+            ax1.set_xlim(pd.Timestamp("2000-01-01 00:00"), pd.Timestamp("2000-01-01 23:59"))
 
             # Y軸設定
             if y_axis_mode == "固定 0~1":
-                ax.set_ylim(0, 1)
+                ax1.set_ylim(0, 1)
             elif y_axis_mode == "自訂 min/max":
-                ax.set_ylim(y_min_custom, y_max_custom)
+                ax1.set_ylim(y_min_custom, y_max_custom)
 
+            # 標題 + 字體設定
+            ax1.set_xlabel("時間 (HH:MM)", fontsize=font_size + 4, fontweight="bold")
+            ax1.set_ylabel(full_col, fontsize=font_size + 4, fontweight="bold")
+            ax1.set_title(f"不同日期同一時間比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})",
+                          fontsize=font_size + 10, fontweight="bold")
+            ax1.legend(fontsize=font_size)
+
+            if show_weather and weather_right_yaxis and ax2:
+                ax2.set_ylabel("氣溫 (°C)", fontsize=font_size + 4, fontweight="bold")
+                ax2.legend(loc="upper right", fontsize=font_size)
+
+            ax1.grid(True)
             st.pyplot(fig, use_container_width=True)
     else:
         st.warning("⚠️ 無法讀取欄位定義，請稍後重試。")
