@@ -568,7 +568,7 @@ with tabs[1]:
 
 
 with tabs[2]:
-    st.title("📅 PIT/TT 日對日比對 (時間表示版 + 快速Resample + 柳營八翁氣溫 + 雙Y軸可選)")
+    st.title("📅 PIT/TT 日對日比對 (可自行加入柳營八翁氣溫分析)")
 
     import random
     import matplotlib.dates as mdates
@@ -646,6 +646,26 @@ with tabs[2]:
             else:
                 print(f"[WARNING] 找不到氣溫資料 for {date_str} → 跳過氣溫線")
                 return pd.DataFrame()
+
+    # ==== 讀氣象CSV函數 ====
+    def load_weather_csv(date_str):
+        csv_filename = f"weather_柳營八翁_{date_str}.csv"
+        if os.path.exists(csv_filename):
+            df_weather = pd.read_csv(csv_filename)
+            df_weather["ObsTime"] = pd.to_datetime(df_weather["ObsTime"], format="%Y/%m/%d %H:%M")
+
+            df_weather["Time_dt"] = df_weather["ObsTime"].map(
+                lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+            )
+
+            df_weather = df_weather.sort_values("Time_dt")
+            print(f"[INFO] 使用 CSV 讀取 {date_str} 氣溫 → {csv_filename}")
+            return df_weather
+        else:
+            print(f"[WARNING] 找不到氣溫CSV {csv_filename} → 不畫氣溫線")
+            return pd.DataFrame()
+
+
 
     # ==== 線條預設顏色列表（和Tab1一致）====
     default_colors = [
@@ -767,31 +787,30 @@ with tabs[2]:
                     color=color_per_date[date_str]
                 )
 
-                df_weather = fetch_weather_temperature(date_str)
+                #==== 讀氣溫CSV + 畫氣溫線（左Y軸，不用雙Y軸） ====
+                df_weather = load_weather_csv(date_str)
 
                 if show_weather and not df_weather.empty:
-                    if weather_right_yaxis and ax2:
-                        ax2.plot(
-                            df_weather["Time_dt"],
-                            df_weather["TEMP"],
-                            label=f"{date_str} 氣溫",
-                            linewidth=2,
-                            linestyle="--",
-                            color="black"
-                        )
-                    else:
-                        ax1.plot(
-                            df_weather["Time_dt"],
-                            df_weather["TEMP"],
-                            label=f"{date_str} 氣溫",
-                            linewidth=2,
-                            linestyle="--",
-                            color="black"
-                        )
+                    ax1.plot(
+                        df_weather["Time_dt"],
+                        df_weather["TEMP"],
+                        label=f"{date_str} 氣溫",
+                        linewidth=2,
+                        linestyle="--",
+                        color="black"
+                    )
+
 
             ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
             ax1.xaxis.set_major_locator(mdates.HourLocator(interval=1))
             ax1.set_xlim(pd.Timestamp("2000-01-01 00:00"), pd.Timestamp("2000-01-01 23:59"))
+
+            # ==== 調大 X/Y軸刻度字體 ====
+            tick_fontsize = font_size + 6  # 調大一點
+
+            ax1.tick_params(axis='x', labelsize=tick_fontsize)
+            ax1.tick_params(axis='y', labelsize=tick_fontsize)
+
 
             if y_axis_mode == "固定 0~1":
                 ax1.set_ylim(0, 1)
