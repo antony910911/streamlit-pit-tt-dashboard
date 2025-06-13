@@ -555,55 +555,89 @@ with tabs[1]:
 
 
 with tabs[2]:
-    st.title("PIT/TT 日對日比對")
+    st.title("📅 PIT/TT 日對日比對")
 
-    # 選要比對哪些日期
-    selected_dates = st.multiselect(
-        "選擇要比對的日期 (可多選)",
-        pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
-    )
+    if st.session_state.df_all is None or st.session_state.all_columns is None:
+        st.warning("⚠️ 請先在【分析功能】頁查詢過一次資料，載入欄位定義。")
+    else:
+        # 選擇要比對的日期範圍 (最近14天預設可選)
+        st.sidebar.title("⚙️ 比對設定")
+        date_options = pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
 
-    # 選擇 PIT/TT 欄位
-    available_pit_tt_prefixes = sorted(list(set(
-        [col.split(" / ")[0] for col in st.session_state.all_columns if col.startswith("pit-") or col.startswith("tt-")]
-    )))
-    pit_tt_selected = st.selectbox("選擇 PIT / TT 欄位", available_pit_tt_prefixes)
+        selected_dates = st.sidebar.multiselect(
+            "選擇要比對的日期 (可多選)",
+            options=date_options,
+            default=[date_options[-1], date_options[-2]]  # 預設選最近2天
+        )
 
-    if st.button("開始比對") and len(selected_dates) > 0:
-        fig, ax = plt.subplots(figsize=(20, 10))
+        # 選擇 PIT/TT 欄位
+        available_pit_tt_prefixes = sorted(list(set(
+            [col.split(" / ")[0] for col in st.session_state.all_columns if col.startswith("pit-") or col.startswith("tt-")]
+        )))
+        pit_tt_selected = st.sidebar.selectbox("選擇 PIT / TT 欄位", available_pit_tt_prefixes)
 
-        for date_str in selected_dates:
-            date_obj = pd.to_datetime(date_str).date()
+        # Y 軸區間設定
+        y_axis_mode = st.sidebar.radio("Y 軸區間", ["Auto", "固定 0~1", "自訂 min/max"])
+        y_min_custom = None
+        y_max_custom = None
+        if y_axis_mode == "自訂 min/max":
+            y_min_custom = st.sidebar.number_input("自訂 Y 軸最小值", value=0.0)
+            y_max_custom = st.sidebar.number_input("自訂 Y 軸最大值", value=1.0)
 
-            # 用你原本的 fetch_csv_and_load_df 抓該天資料
-            df_day, _ = fetch_csv_and_load_df(
-                start_date=date_obj,
-                start_time=pd.to_datetime("00:00").time(),
-                end_date=date_obj,
-                end_time=pd.to_datetime("23:59").time()
-            )
+        # 開始比對按鈕
+        if st.button("🚀 開始比對") and len(selected_dates) > 0:
+            fig, ax = plt.subplots(figsize=(20, 10))
 
-            # 取出完整欄名 (英文/中文名)
-            full_col = [col for col in st.session_state.all_columns if col.startswith(pit_tt_selected)][0]
+            # 依序畫每一天
+            for date_str in selected_dates:
+                date_obj = pd.to_datetime(date_str).date()
 
-            # 處理 index → 只保留時間部份做 X 軸
-            df_day["Time_only"] = df_day.index.time
-            df_plot = df_day[[full_col, "Time_only"]].dropna()
+                # 用你原本的 fetch_csv_and_load_df 抓該天資料
+                df_day, _ = fetch_csv_and_load_df(
+                    start_date=date_obj,
+                    start_time=pd.to_datetime("00:00").time(),
+                    end_date=date_obj,
+                    end_time=pd.to_datetime("23:59").time()
+                )
 
-            ax.plot(
-                pd.to_datetime(df_plot["Time_only"].astype(str)),
-                df_plot[full_col],
-                label=f"{date_str}"
-            )
+                # 取出完整欄名 (英文/中文名)
+                full_col = [col for col in st.session_state.all_columns if col.startswith(pit_tt_selected)][0]
 
-        # 繪圖設定
-        ax.set_xlabel("時間 (00:00 ~ 23:59)", fontsize=16)
-        ax.set_ylabel(full_col, fontsize=16)
-        ax.set_title(f"同一天時間不同日期比對 - {pit_tt_selected}", fontsize=20)
-        ax.legend(fontsize=14)
-        plt.xticks(rotation=45)
-        plt.grid(True)
+                # 處理 index → 只保留時間部份做 X 軸 (to_timedelta 方式更穩)
+                df_day["Time_only"] = df_day.index.time
+                df_plot = df_day[[full_col, "Time_only"]].dropna()
 
-        st.pyplot(fig)
+                # 轉換時間為 timedelta (00:00:00 → 0 sec)
+                df_plot["Seconds_since_midnight"] = df_plot["Time_only"].apply(
+                    lambda t: t.hour * 3600 + t.minute * 60 + t.second
+                )
+                df_plot = df_plot.sort_values("Seconds_since_midnight")
 
+                ax.plot(
+                    df_plot["Seconds_since_midnight"] / 3600,  # 轉換成 小時，當 X 軸
+                    df_plot[full_col],
+                    label=f"{date_str}",
+                    linewidth=2
+                )
 
+            # 繪圖設定
+            ax.set_xlabel("時間 (小時)", fontsize=16)
+            ax.set_ylabel(full_col, fontsize=16)
+            ax.set_title(f"同一天時間不同日期比對 - {pit_tt_selected}", fontsize=20)
+            ax.legend(fontsize=14)
+            ax.grid(True)
+
+            # X 軸固定 0~24 小時
+            ax.set_xlim(0, 24)
+
+            # Y 軸設定
+            if y_axis_mode == "固定 0~1":
+                ax.set_ylim(0, 1)
+            elif y_axis_mode == "自訂 min/max":
+                ax.set_ylim(y_min_custom, y_max_custom)
+            else:
+                # Auto 不設定 ylim
+                pass
+
+            plt.xticks(np.arange(0, 25, 1))  # 每小時一格
+            st.pyplot(fig, use_container_width=True)
