@@ -609,7 +609,7 @@ with tabs[2]:
                     # 要手動改欄位名 → 看你的MH欄位 → 假設你知道 ObsTime 對應時間欄、氣溫欄是哪一欄
                 # 這邊範例假設：欄位名稱叫 '時間' 和 '氣溫' → 你可以對應調整
                     df_weather.rename(columns={
-                        "時間": " yyyymmddhh",
+                        "時間": "yyyymmddhh",
                         "氣溫": "TX01"
                     }, inplace=True)
 
@@ -625,9 +625,9 @@ with tabs[2]:
                     )
 
                 # 處理 ObsTime → Time_dt
-                df_weather["ObsTime"] = pd.to_datetime(df_weather["ObsTime"], format="%Y/%m/%d %H:%M")
+                df_weather["yyyymmddhh"] = pd.to_datetime(df_weather["yyyymmddhh"], format="%Y/%m/%d %H:%M")
 
-                df_weather["Time_dt"] = df_weather["ObsTime"].map(
+                df_weather["Time_dt"] = df_weather["yyyymmddhh"].map(
                     lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
                 )
 
@@ -770,7 +770,7 @@ with tabs[2]:
                 if show_weather and not df_weather.empty:
                     ax1.plot(
                         df_weather["Time_dt"],
-                        df_weather["TEMP"],
+                        df_weather["TX01"],
                         label=f"{date_str} 氣溫",
                         linewidth=2,
                         linestyle="--",
