@@ -578,10 +578,10 @@ with tabs[2]:
     # ==== 讀氣象CSV函數 ====
     def load_weather_csv(uploaded_file):
         if uploaded_file is not None:
-            try:
-                # 先檢查第一行 → 是否為 MH 格式
+           try:
+               # 先檢查所有行 → 是否為 MH 格式
                 lines = uploaded_file.getvalue().decode("utf-8-sig").splitlines()
-                is_mh_format = any(line.startswith("*") or line.startswith("#") for line in lines[:10])
+                is_mh_format = any(line.startswith("*") or line.startswith("#") for line in lines if line.strip() != "")
 
                 if is_mh_format:
                     print(f"[INFO] 偵測到 MH 格式 → 自動尋找 header 行 + 處理")
@@ -596,23 +596,34 @@ with tabs[2]:
                     if header_line_idx is None:
                         raise ValueError("找不到欄位名稱行 (# 開頭) → 無法解析檔案！")
 
-                    # 讀檔 → 從 header 行開始
+                    # 確認 header 行內容 → 列印看看
+                    print(f"[DEBUG] header line content: {lines[header_line_idx]}")
+
+                    # 讀檔 → 從 header 行以下開始
                     uploaded_file.seek(0)
                     df_weather = pd.read_csv(
                         uploaded_file,
-                        skiprows=header_line_idx + 1,  # header 行本身不要 → 要跳過
-                        names=["stno", "yyyymmddhh", "TEMP"],  # 自訂欄位名
+                        skiprows=header_line_idx + 1,
+                        names=["stno", "yyyymmddhh", "TEMP"],
                         encoding="utf-8-sig"
                     )
 
                     # 濾掉長度不等於10的 yyyymmddhh
                     df_weather = df_weather[df_weather["yyyymmddhh"].astype(str).str.len() == 10]
 
-                    # 轉 ObsTime
-                    df_weather["ObsTime"] = pd.to_datetime(df_weather["yyyymmddhh"].astype(str), format="%Y%m%d%H")
-                    
-                    df_weather["ObsTime"] = pd.to_datetime(df_weather["yyyymmddhh"].astype(str), format="%Y%m%d%H", errors="coerce")
+                    # 確認目前欄位有沒有空值
+                    print(f"[DEBUG] after length filter, df shape: {df_weather.shape}")
+                    print(f"[DEBUG] any NA in yyyymmddhh? → {df_weather['yyyymmddhh'].isna().sum()}")
 
+                    # 轉 ObsTime → 必須加 errors="coerce"
+                    df_weather["ObsTime"] = pd.to_datetime(
+                        df_weather["yyyymmddhh"].astype(str),
+                        format="%Y%m%d%H",
+                        errors="coerce"  # 重要 → 保證不炸
+                    )
+
+                    # 再濾掉 ObsTime 為 NaT 的行 → 乾淨資料
+                    df_weather = df_weather[df_weather["ObsTime"].notna()]
 
                     # 轉 Time_dt
                     df_weather["Time_dt"] = df_weather["ObsTime"].map(
@@ -634,7 +645,17 @@ with tabs[2]:
                         on_bad_lines='warn'
                     )
 
-                    df_weather["ObsTime"] = pd.to_datetime(df_weather["ObsTime"], format="%Y/%m/%d %H:%M")
+                    # 防呆檢查 → 是否含 ObsTime 欄位
+                    if "ObsTime" not in df_weather.columns:
+                        raise ValueError("上傳的標準CSV缺少 ObsTime 欄位，請確認檔案格式是否正確（需含 ObsTime 欄位）！")
+
+                    df_weather["ObsTime"] = pd.to_datetime(
+                        df_weather["ObsTime"],
+                        format="%Y/%m/%d %H:%M",
+                        errors="coerce"  # 同樣加 errors="coerce"
+                    )
+
+                    df_weather = df_weather[df_weather["ObsTime"].notna()]  # drop NaT rows
 
                     df_weather["Time_dt"] = df_weather["ObsTime"].map(
                         lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
