@@ -578,12 +578,13 @@ with tabs[2]:
     # ==== 讀氣象CSV函數 ====
     def load_weather_csv(uploaded_file):
         if uploaded_file is not None:
-            df_weather = pd.read_csv(uploaded_file)
-            df_weather["ObsTime"] = pd.to_datetime(df_weather["ObsTime"], format="%Y/%m/%d %H:%M")
-
-            df_weather["Time_dt"] = df_weather["ObsTime"].map(
-                lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+            df_weather = pd.read_csv(
+                uploaded_file,
+                sep=None,
+                engine="python",
+                encoding="utf-8-sig"
             )
+
 
             df_weather = df_weather.sort_values("Time_dt")
             print(f"[INFO] 使用 上傳CSV 讀取氣溫 → {uploaded_file.name}")
