@@ -595,6 +595,9 @@ with tabs[2]:
                         encoding="utf-8-sig"
                     )
 
+                    df_weather["ObsTime"] = pd.to_datetime(df_weather["yyyymmddhh"].astype(str), format="%Y%m%d%H")
+
+                    
                     # 轉換 yyyymmddhh → ObsTime datetime 格式
                     df_weather["ObsTime"] = pd.to_datetime(df_weather["yyyymmddhh"].astype(str), format="%Y%m%d%H")
 
