@@ -573,7 +573,14 @@ with tabs[2]:
     import random
     import matplotlib.dates as mdates
 
-    # ==== 隨機顏色輔助函數 ====
+    # ==== 線條預設顏色列表（和Tab1一致）====
+    default_colors = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+        "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+        "#bcbd22", "#17becf"
+    ]
+
+    # ==== 輔助：隨機色 fallback 用 ====
     def random_color():
         return "#{:06x}".format(random.randint(0, 0xFFFFFF))
 
@@ -626,17 +633,21 @@ with tabs[2]:
         # 線條粗細 → 全局一個 slider
         global_line_width = st.sidebar.slider("線條粗細 (全部線)", 1, 10, 2)
 
-        # 初始化 color_per_date dict (第一次自動隨機給色)
+        # ==== 初始化 color_per_date dict ====
         if "tab3_color_per_date" not in st.session_state:
             st.session_state.tab3_color_per_date = {}
 
         color_per_date = st.session_state.tab3_color_per_date
 
-        for date_str in selected_dates:
+        # ==== 初始化 per 日期顏色 (順序指定) ====
+        for i, date_str in enumerate(selected_dates):
             if date_str not in color_per_date:
-                color_per_date[date_str] = random_color()
+                if i < len(default_colors):
+                    color_per_date[date_str] = default_colors[i]
+                else:
+                    color_per_date[date_str] = random_color()
 
-        # Sidebar 顏色選擇器 (允許修改)
+        # ==== Sidebar 顏色選擇器 (可改色) ====
         for date_str in selected_dates:
             color_per_date[date_str] = st.sidebar.color_picker(
                 f"線條顏色 - {date_str}", color_per_date[date_str]
