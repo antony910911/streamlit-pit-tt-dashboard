@@ -157,7 +157,7 @@ st.set_page_config(
 query_params = st.experimental_get_query_params()
 selected_tab = query_params.get("tab", ["首頁"])[0]
 
-tab_names = ["首頁", "分析功能"]
+tab_names = ["首頁", "分析功能", "PIT/TT日對日比對"]
 tab_idx = tab_names.index(selected_tab) if selected_tab in tab_names else 0
 
 tabs = st.tabs(tab_names)
@@ -554,5 +554,56 @@ with tabs[1]:
         st.pyplot(fig, use_container_width=True)
 
 
+with tabs[2]:
+    st.title("PIT/TT 日對日比對")
+
+    # 選要比對哪些日期
+    selected_dates = st.multiselect(
+        "選擇要比對的日期 (可多選)",
+        pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
+    )
+
+    # 選擇 PIT/TT 欄位
+    available_pit_tt_prefixes = sorted(list(set(
+        [col.split(" / ")[0] for col in st.session_state.all_columns if col.startswith("pit-") or col.startswith("tt-")]
+    )))
+    pit_tt_selected = st.selectbox("選擇 PIT / TT 欄位", available_pit_tt_prefixes)
+
+    if st.button("開始比對") and len(selected_dates) > 0:
+        fig, ax = plt.subplots(figsize=(20, 10))
+
+        for date_str in selected_dates:
+            date_obj = pd.to_datetime(date_str).date()
+
+            # 用你原本的 fetch_csv_and_load_df 抓該天資料
+            df_day, _ = fetch_csv_and_load_df(
+                start_date=date_obj,
+                start_time=pd.to_datetime("00:00").time(),
+                end_date=date_obj,
+                end_time=pd.to_datetime("23:59").time()
+            )
+
+            # 取出完整欄名 (英文/中文名)
+            full_col = [col for col in st.session_state.all_columns if col.startswith(pit_tt_selected)][0]
+
+            # 處理 index → 只保留時間部份做 X 軸
+            df_day["Time_only"] = df_day.index.time
+            df_plot = df_day[[full_col, "Time_only"]].dropna()
+
+            ax.plot(
+                pd.to_datetime(df_plot["Time_only"].astype(str)),
+                df_plot[full_col],
+                label=f"{date_str}"
+            )
+
+        # 繪圖設定
+        ax.set_xlabel("時間 (00:00 ~ 23:59)", fontsize=16)
+        ax.set_ylabel(full_col, fontsize=16)
+        ax.set_title(f"同一天時間不同日期比對 - {pit_tt_selected}", fontsize=20)
+        ax.legend(fontsize=14)
+        plt.xticks(rotation=45)
+        plt.grid(True)
+
+        st.pyplot(fig)
 
 
