@@ -817,9 +817,14 @@ with tabs[2]:
                         df_weather_resampled["TX01"],
                         label=f"{date_str} 氣溫",
                         linewidth=2,
-                        linestyle="--",
-                        color=color_per_date[date_str]  # 這裡改成當天對應顏色
+                        linestyle="--",           # 保留虛線
+                        marker='o',               # 實心圓點
+                        markersize=6,             # 圓點大小，你可以調整，常用 5-8
+                        markerfacecolor=color_per_date[date_str],  # 圓點內顏色
+                        markeredgecolor=color_per_date[date_str],  # 圓點邊框顏色
+                        color=color_per_date[date_str]             # 線條顏色
                     )
+
 
 
             ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
