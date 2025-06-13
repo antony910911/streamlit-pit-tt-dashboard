@@ -817,7 +817,7 @@ with tabs[2]:
                     ax1.plot(
                         df_weather_resampled["Time_dt"],
                         df_weather_resampled["TX01"],
-                        label=f"{date_str} 氣溫",
+                        label=f"{date_str} 柳營氣溫",
                         linewidth=2,
                         linestyle="--",           # 保留虛線
                         marker='o',               # 實心圓點
