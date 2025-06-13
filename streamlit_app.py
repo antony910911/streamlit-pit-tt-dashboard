@@ -577,21 +577,33 @@ with tabs[2]:
 
     # ==== 讀氣象CSV函數 ====
     def load_weather_csv(uploaded_file):
-        if uploaded_file is not None:
+    if uploaded_file is not None:
+        try:
             df_weather = pd.read_csv(
                 uploaded_file,
                 sep=None,
                 engine="python",
-                encoding="utf-8-sig"
+                encoding="utf-8-sig",
+                on_bad_lines='warn'  # pandas >=1.3 用這個
             )
 
+            df_weather["ObsTime"] = pd.to_datetime(df_weather["ObsTime"], format="%Y/%m/%d %H:%M")
+
+            df_weather["Time_dt"] = df_weather["ObsTime"].map(
+                lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+            )
 
             df_weather = df_weather.sort_values("Time_dt")
             print(f"[INFO] 使用 上傳CSV 讀取氣溫 → {uploaded_file.name}")
             return df_weather
-        else:
-            print(f"[WARNING] 尚未上傳氣溫CSV → 不畫氣溫線")
+        except Exception as e:
+            st.error(f"❌ 氣溫CSV檔格式錯誤，無法讀取！錯誤訊息: {e}")
+            print(f"[ERROR] 讀CSV失敗: {e}")
             return pd.DataFrame()
+    else:
+        print(f"[WARNING] 尚未上傳氣溫CSV → 不畫氣溫線")
+        return pd.DataFrame()
+
 
     # ==== 線條預設顏色列表（和Tab1一致）====
     default_colors = [
