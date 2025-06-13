@@ -568,7 +568,7 @@ with tabs[1]:
 
 
 with tabs[2]:
-    st.title("📅 PIT/TT 日對日比對 (時間表示版)")
+    st.title("📅 PIT/TT 日對日比對 (時間表示版 + 快速Resample)")
 
     import random
     import matplotlib.dates as mdates
@@ -588,6 +588,14 @@ with tabs[2]:
     if st.session_state.all_columns is None:
         st.session_state.all_columns = load_columns_only()
 
+    # ==== 初始化 tab3_df_cache dict ====
+    if "tab3_df_cache" not in st.session_state:
+        st.session_state.tab3_df_cache = {}
+
+    # ==== 初始化 color_per_date dict ====
+    if "tab3_color_per_date" not in st.session_state:
+        st.session_state.tab3_color_per_date = {}
+
     # ==== 畫面開始 ====
     if st.session_state.all_columns is not None:
         st.sidebar.title("⚙️ 日對日比對設定")
@@ -599,6 +607,11 @@ with tabs[2]:
             options=date_options,
             default=[date_options[-1], date_options[-2]]
         )
+
+        # ==== 清除Cache按鈕 ====
+        if st.sidebar.button("🗑️ 清除資料Cache"):
+            st.session_state.tab3_df_cache = {}
+            st.success("✅ 已清除 Tab3 資料Cache")
 
         # PIT/TT欄位選擇
         available_pit_tt_prefixes = sorted(list(set(
@@ -626,6 +639,7 @@ with tabs[2]:
             "30秒": "30s",
             "1分鐘": "1min",
             "5分鐘": "5min",
+            "10分鐘": "10min",
             "15分鐘": "15min",
         }
         sampling_interval = sampling_interval_map[sampling_interval_display]
@@ -633,13 +647,8 @@ with tabs[2]:
         # 線條粗細 → 全局一個 slider
         global_line_width = st.sidebar.slider("線條粗細 (全部線)", 1, 10, 2)
 
-        # ==== 初始化 color_per_date dict ====
-        if "tab3_color_per_date" not in st.session_state:
-            st.session_state.tab3_color_per_date = {}
-
+        # 初始化 color_per_date (順序指定)
         color_per_date = st.session_state.tab3_color_per_date
-
-        # ==== 初始化 per 日期顏色 (順序指定) ====
         for i, date_str in enumerate(selected_dates):
             if date_str not in color_per_date:
                 if i < len(default_colors):
@@ -647,7 +656,7 @@ with tabs[2]:
                 else:
                     color_per_date[date_str] = random_color()
 
-        # ==== Sidebar 顏色選擇器 (可改色) ====
+        # Sidebar 顏色選擇器 (可改色)
         for date_str in selected_dates:
             color_per_date[date_str] = st.sidebar.color_picker(
                 f"線條顏色 - {date_str}", color_per_date[date_str]
@@ -660,15 +669,23 @@ with tabs[2]:
             for date_str in selected_dates:
                 date_obj = pd.to_datetime(date_str).date()
 
-                df_day, _ = fetch_csv_and_load_df(
-                    start_date=date_obj,
-                    start_time=pd.to_datetime("00:00").time(),
-                    end_date=date_obj,
-                    end_time=pd.to_datetime("23:59").time()
-                )
+                # 🚀 判斷是否已有 cache，沒有才抓資料
+                if date_str in st.session_state.tab3_df_cache:
+                    df_day = st.session_state.tab3_df_cache[date_str]
+                    print(f"[CACHE] 使用 cache 資料 - {date_str}")
+                else:
+                    df_day, _ = fetch_csv_and_load_df(
+                        start_date=date_obj,
+                        start_time=pd.to_datetime("00:00").time(),
+                        end_date=date_obj,
+                        end_time=pd.to_datetime("23:59").time()
+                    )
+                    st.session_state.tab3_df_cache[date_str] = df_day
+                    print(f"[FETCH] 下載資料 - {date_str}")
 
                 full_col = [col for col in st.session_state.all_columns if col.startswith(pit_tt_selected)][0]
 
+                # Resample
                 df_day_resampled = df_day[[full_col]].resample(sampling_interval).mean()
                 df_day_resampled = df_day_resampled.asfreq(sampling_interval)
                 df_day_resampled = df_day_resampled.dropna()
