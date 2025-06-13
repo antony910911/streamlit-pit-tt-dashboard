@@ -633,7 +633,7 @@ with tabs[2]:
 
                 df_weather = df_weather.sort_values("Time_dt")
                 print(f"[INFO] 使用 上傳檔案 讀取氣溫 → {uploaded_file.name}")
-                eturn df_weather
+                return df_weather
 
             except Exception as e:
                 st.error(f"❌ 氣溫CSV檔格式錯誤，無法讀取！錯誤訊息: {e}")
