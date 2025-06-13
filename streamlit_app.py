@@ -576,72 +576,65 @@ with tabs[2]:
     import os
 
     # ==== 讀氣象CSV函數 ====
-    def load_weather_csv(uploaded_file):
-        if uploaded_file is not None:
-            try:
-                # 先檢查前幾行 → 判斷是 MH 格式 or 正常 CSV
-                lines = uploaded_file.getvalue().decode("utf-8-sig").splitlines()
-                is_mh_format = any(line.startswith("*") or line.startswith("#") for line in lines[:10])
+def load_weather_csv(uploaded_file):
+    if uploaded_file is not None:
+        try:
+            # 先檢查第一行 → 是否為 MH 格式
+            first_line = uploaded_file.getvalue().decode("utf-8-sig").splitlines()[0]
+            is_mh_format = first_line.startswith("#")
 
-                if is_mh_format:
-                    # 處理 MH 格式
-                    print(f"[INFO] 偵測到 MH 格式 → 進行 read_fwf 解析")
+            if is_mh_format:
+                print(f"[INFO] 偵測到 MH 格式 → 使用 read_csv + skiprows=1")
 
-                    # 找出 # header 行
-                    header_line_idx = None
-                    for idx, line in enumerate(lines):
-                        if line.startswith("#"):
-                            header_line_idx = idx
-                            break
+                # 用 read_csv → 跳過 header 註解行
+                uploaded_file.seek(0)
+                df_weather = pd.read_csv(
+                    uploaded_file,
+                    skiprows=1,
+                    names=["stno", "yyyymmddhh", "TEMP"],  # 指定欄位名稱
+                    encoding="utf-8-sig"
+                )
 
-                    if header_line_idx is None:
-                        raise ValueError("找不到欄位名稱行 (# 開頭) → 無法解析檔案！")
+                # 轉換 yyyymmddhh → ObsTime datetime 格式
+                df_weather["ObsTime"] = pd.to_datetime(df_weather["yyyymmddhh"].astype(str), format="%Y%m%d%H")
 
-                    # 用 read_fwf 讀取
-                    import io
-                    uploaded_file.seek(0)  # 重置指標
-                    df_weather = pd.read_fwf(
-                        uploaded_file,
-                        skiprows=header_line_idx,
-                        encoding="utf-8-sig"
-                    )
-
-                    # 要手動改欄位名 → 看你的MH欄位 → 假設你知道 ObsTime 對應時間欄、氣溫欄是哪一欄
-                # 這邊範例假設：欄位名稱叫 '時間' 和 '氣溫' → 你可以對應調整
-                    df_weather.rename(columns={
-                        "時間": " yyyymmddhh",
-                        "氣溫": "TX01"
-                    }, inplace=True)
-
-                else:
-                    # 正常 CSV 處理
-                    print(f"[INFO] 偵測到 標準 CSV 格式 → 使用 read_csv 解析")
-                    df_weather = pd.read_csv(
-                        uploaded_file,
-                        sep=None,
-                        engine="python",
-                        encoding="utf-8-sig",
-                        on_bad_lines='warn'  # pandas >=1.3 用這個
-                    )
-
-                # 處理 ObsTime → Time_dt
-                df_weather[" yyyymmddhh"] = pd.to_datetime(df_weather[" yyyymmddhh"], format="%Y/%m/%d %H:%M")
-
-                df_weather["Time_dt"] = df_weather[" yyyymmddhh"].map(
+                # 轉換成 Time_dt (固定到 2000/01/01 HH:MM 方便 Tab3 畫圖)
+                df_weather["Time_dt"] = df_weather["ObsTime"].map(
                     lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
                 )
 
                 df_weather = df_weather.sort_values("Time_dt")
-                print(f"[INFO] 使用 上傳檔案 讀取氣溫 → {uploaded_file.name}")
+
+                print(f"[INFO] 使用 MH 格式檔案 讀取氣溫 → {uploaded_file.name}")
                 return df_weather
 
-            except Exception as e:
-                st.error(f"❌ 氣溫CSV檔格式錯誤，無法讀取！錯誤訊息: {e}")
-                print(f"[ERROR] 讀CSV失敗: {e}")
-                return pd.DataFrame()
-        else:
-            print(f"[WARNING] 尚未上傳氣溫CSV → 不畫氣溫線")
+            else:
+                print(f"[INFO] 偵測到 標準 CSV 格式 → 使用 read_csv 解析")
+                df_weather = pd.read_csv(
+                    uploaded_file,
+                    sep=None,
+                    engine="python",
+                    encoding="utf-8-sig",
+                    on_bad_lines='warn'
+                )
+
+                df_weather["ObsTime"] = pd.to_datetime(df_weather["ObsTime"], format="%Y/%m/%d %H:%M")
+
+                df_weather["Time_dt"] = df_weather["ObsTime"].map(
+                    lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+                )
+
+                df_weather = df_weather.sort_values("Time_dt")
+                print(f"[INFO] 使用 上傳CSV 讀取氣溫 → {uploaded_file.name}")
+                return df_weather
+
+        except Exception as e:
+            st.error(f"❌ 氣溫CSV檔格式錯誤，無法讀取！錯誤訊息: {e}")
+            print(f"[ERROR] 讀CSV失敗: {e}")
             return pd.DataFrame()
+    else:
+        print(f"[WARNING] 尚未上傳氣溫CSV → 不畫氣溫線")
+        return pd.DataFrame()
 
 
 
