@@ -131,6 +131,19 @@ def fetch_csv_and_load_df(start_date, start_time, end_date, end_time):
 
 
     return df, combined_columns
+
+# ==== 輔助函數：只讀欄位定義 ====
+def load_columns_only():
+    dummy_date = pd.Timestamp.today().date()
+    df_dummy, columns_dummy = fetch_csv_and_load_df(
+        start_date=dummy_date,
+        start_time=pd.to_datetime("00:00").time(),
+        end_date=dummy_date,
+        end_time=pd.to_datetime("00:05").time()
+    )
+    return columns_dummy
+
+
 # ==== 初始化 Session State ====
 if "df_all" not in st.session_state:
     st.session_state.df_all = None
@@ -557,9 +570,12 @@ with tabs[1]:
 with tabs[2]:
     st.title("📅 PIT/TT 日對日比對 (時間表示版)")
 
-    if st.session_state.df_all is None or st.session_state.all_columns is None:
-        st.warning("⚠️ 請先在【分析功能】頁查詢過一次資料，載入欄位定義。")
-    else:
+    # 🚀 方法2 → 如果 all_columns 尚未有，先自己load一次
+    if st.session_state.all_columns is None:
+        st.session_state.all_columns = load_columns_only()
+
+    # 確保 all_columns 已經存在 → 開始畫面
+    if st.session_state.all_columns is not None:
         # === Sidebar 設定 ===
         st.sidebar.title("⚙️ 日對日比對設定")
 
@@ -674,3 +690,5 @@ with tabs[2]:
                 pass
 
             st.pyplot(fig, use_container_width=True)
+    else:
+        st.warning("⚠️ 無法讀取欄位定義，請稍後重試。")
