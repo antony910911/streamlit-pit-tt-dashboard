@@ -798,14 +798,27 @@ with tabs[2]:
                 df_weather = load_weather_csv(uploaded_weather_csv)
 
                 if show_weather and not df_weather.empty:
+                    # ==== Resample 氣溫線 ====（這樣才會跟 PIT/TT 對齊）
+                    df_weather.set_index("ObsTime", inplace=True)
+                    df_weather_resampled = df_weather[["TX01"]].resample(sampling_interval).mean()
+                    df_weather_resampled = df_weather_resampled.asfreq(sampling_interval)
+                    df_weather_resampled = df_weather_resampled.dropna()
+
+                    df_weather_resampled["Time_dt"] = df_weather_resampled.index.map(
+                        lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+                    )
+                    df_weather_resampled = df_weather_resampled.sort_values("Time_dt")
+
+                    # ==== 畫氣溫線，用 color_per_date ====
                     ax1.plot(
-                        df_weather["Time_dt"],
-                        df_weather["TX01"],
+                        df_weather_resampled["Time_dt"],
+                        df_weather_resampled["TX01"],
                         label=f"{date_str} 氣溫",
                         linewidth=2,
                         linestyle="--",
-                        color="black"
+                        color=color_per_date[date_str]  # 這裡改成當天對應顏色
                     )
+
 
             ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
             ax1.xaxis.set_major_locator(mdates.HourLocator(interval=1))
