@@ -798,6 +798,8 @@ with tabs[2]:
                 df_weather = load_weather_csv(uploaded_weather_csv)
 
                 if show_weather and not df_weather.empty:
+                    df_weather["TX01"] = pd.to_numeric(df_weather["TX01"], errors="coerce")
+
                     # ==== Resample 氣溫線 ====（這樣才會跟 PIT/TT 對齊）
                     df_weather.set_index("ObsTime", inplace=True)
                     df_weather_resampled = df_weather[["TX01"]].resample(sampling_interval).mean()
