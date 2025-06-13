@@ -796,6 +796,8 @@ with tabs[2]:
 
                 # ==== 讀上傳的氣溫CSV + 畫氣溫線 ====
                 df_weather = load_weather_csv(uploaded_weather_csv)
+                # 加這一段！！ → 只保留該 date_str 的資料
+                df_weather = df_weather[df_weather["ObsTime"].dt.date == date_obj]
 
                 if show_weather and not df_weather.empty:
                     df_weather["TX01"] = pd.to_numeric(df_weather["TX01"], errors="coerce")
