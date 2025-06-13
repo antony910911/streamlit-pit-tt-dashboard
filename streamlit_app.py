@@ -580,39 +580,52 @@ with tabs[2]:
         if uploaded_file is not None:
             try:
                 # 先檢查第一行 → 是否為 MH 格式
-                first_line = uploaded_file.getvalue().decode("utf-8-sig").splitlines()[0]
-                is_mh_format = first_line.startswith("#")
+                lines = uploaded_file.getvalue().decode("utf-8-sig").splitlines()
+                is_mh_format = any(line.startswith("*") or line.startswith("#") for line in lines[:10])
 
                 if is_mh_format:
-                    print(f"[INFO] 偵測到 MH 格式 → 使用 read_csv + skiprows=1")
+                    print(f"[INFO] 偵測到 MH 格式 → 自動尋找 header 行 + 處理")
 
-                    # 用 read_csv → 跳過 header 註解行
+                    # 找出 # header 行
+                    header_line_idx = None
+                    for idx, line in enumerate(lines):
+                        if line.startswith("#"):
+                            header_line_idx = idx
+                            break
+
+                    if header_line_idx is None:
+                        raise ValueError("找不到欄位名稱行 (# 開頭) → 無法解析檔案！")
+
+                    # 讀檔 → 從 header 行開始
                     uploaded_file.seek(0)
                     df_weather = pd.read_csv(
                         uploaded_file,
-                        skiprows=1,
-                        names=["stno", "yyyymmddhh", "TEMP"],  # 指定欄位名稱
+                        skiprows=header_line_idx + 1,  # header 行本身不要 → 要跳過
+                        names=["stno", "yyyymmddhh", "TEMP"],  # 自訂欄位名
                         encoding="utf-8-sig"
                     )
 
-                    df_weather["ObsTime"] = pd.to_datetime(df_weather["yyyymmddhh"].astype(str), format="%Y%m%d%H")
+                    # 濾掉長度不等於10的 yyyymmddhh
+                    df_weather = df_weather[df_weather["yyyymmddhh"].astype(str).str.len() == 10]
 
+                    # 轉 ObsTime
+                    df_weather["ObsTime"] = pd.to_datetime(df_weather["yyyymmddhh"].astype(str), format="%Y%m%d%H")
                     
-                    # 轉換 yyyymmddhh → ObsTime datetime 格式
-                    df_weather["ObsTime"] = pd.to_datetime(df_weather["yyyymmddhh"].astype(str), format="%Y%m%d%H")
+                    df_weather["ObsTime"] = pd.to_datetime(df_weather["yyyymmddhh"].astype(str), format="%Y%m%d%H", errors="coerce")
 
-                    # 轉換成 Time_dt (固定到 2000/01/01 HH:MM 方便 Tab3 畫圖)
+
+                    # 轉 Time_dt
                     df_weather["Time_dt"] = df_weather["ObsTime"].map(
                         lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
                     )
 
                     df_weather = df_weather.sort_values("Time_dt")
-
                     print(f"[INFO] 使用 MH 格式檔案 讀取氣溫 → {uploaded_file.name}")
                     return df_weather
 
                 else:
                     print(f"[INFO] 偵測到 標準 CSV 格式 → 使用 read_csv 解析")
+                    uploaded_file.seek(0)
                     df_weather = pd.read_csv(
                         uploaded_file,
                         sep=None,
