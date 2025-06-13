@@ -573,63 +573,79 @@ with tabs[2]:
     import random
     import matplotlib.dates as mdates
     import requests
+    import os
     from datetime import timedelta
 
     # ==== 氣象API設定 ====
     WEATHER_API_KEY = "CWA-FA8592C7-36CC-4425-AEC4-42B887D0504B"
 
     def fetch_weather_temperature(date_str):
+        """智能氣溫資料讀取 → 今天/昨天用O-A0003-001，過去日用CSV，沒有就跳過"""
         station_id = "C1A660"
         api_key = WEATHER_API_KEY
+        today_str = pd.Timestamp.today().strftime("%Y-%m-%d")
+        yesterday_str = (pd.Timestamp.today() - timedelta(days=1)).strftime("%Y-%m-%d")
 
-        date_obj = pd.to_datetime(date_str)
-        time_from = date_obj.strftime("%Y-%m-%dT00:00:00")
-        time_to = (date_obj + timedelta(days=1) - timedelta(seconds=1)).strftime("%Y-%m-%dT23:59:59")
+        if date_str in [today_str, yesterday_str]:
+            url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001"
+            params = {
+                "Authorization": api_key,
+                "stationId": station_id
+            }
 
-        url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001"
+            response = requests.get(url, params=params)
+            data = response.json()
 
-        params = {
-            "Authorization": api_key,
-            "stationId": station_id,
-            "elementName": "TEMP",
-            "timeFrom": time_from,
-            "timeTo": time_to
-        }
+            records = data.get("records", {}).get("location", [])
+            if not records:
+                print(f"[ERROR] API 回傳無資料 for {station_id}")
+                return pd.DataFrame()
 
-        response = requests.get(url, params=params)
-        data = response.json()
+            record = records[0]
+            obs_times = []
+            temps = []
 
-        records = data.get("records", {}).get("location", [])
-        if not records:
-            print(f"[ERROR] API 回傳無資料 for {station_id} {date_str}")
-            return pd.DataFrame()
+            weather_elements = record.get("weatherElement", [])
 
-        record = records[0]
-        obs_times = []
-        temps = []
+            for elem in weather_elements:
+                if elem["elementName"] == "TEMP":
+                    temp_data = elem.get("time", [])
+                    for item in temp_data:
+                        obs_times.append(pd.to_datetime(item["dataTime"]))
+                        temp_val = item["elementValue"]["value"]
+                        temps.append(float(temp_val) if temp_val != "-99" else None)
 
-        weather_elements = record.get("weatherElement", [])
+            df_weather = pd.DataFrame({
+                "ObsTime": obs_times,
+                "TEMP": temps
+            })
 
-        for elem in weather_elements:
-            if elem["elementName"] == "TEMP":
-                temp_data = elem.get("time", [])
-                for item in temp_data:
-                    obs_times.append(pd.to_datetime(item["dataTime"]))
-                    temp_val = item["elementValue"]["value"]
-                    temps.append(float(temp_val) if temp_val != "-99" else None)
+            df_weather["Time_dt"] = df_weather["ObsTime"].map(
+                lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+            )
 
-        df_weather = pd.DataFrame({
-            "ObsTime": obs_times,
-            "TEMP": temps
-        })
+            df_weather = df_weather.sort_values("Time_dt")
 
-        df_weather["Time_dt"] = df_weather["ObsTime"].map(
-            lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
-        )
+            print(f"[INFO] 使用 O-A0003-001 API 讀取 {date_str} 氣溫")
+            return df_weather
 
-        df_weather = df_weather.sort_values("Time_dt")
+        else:
+            csv_filename = f"weather_柳營八翁_{date_str}.csv"
+            if os.path.exists(csv_filename):
+                df_weather = pd.read_csv(csv_filename)
+                df_weather["ObsTime"] = pd.to_datetime(df_weather["ObsTime"], format="%Y/%m/%d %H:%M")
 
-        return df_weather
+                df_weather["Time_dt"] = df_weather["ObsTime"].map(
+                    lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+                )
+
+                df_weather = df_weather.sort_values("Time_dt")
+
+                print(f"[INFO] 使用 CSV 讀取 {date_str} 氣溫 → {csv_filename}")
+                return df_weather
+            else:
+                print(f"[WARNING] 找不到氣溫資料 for {date_str} → 跳過氣溫線")
+                return pd.DataFrame()
 
     # ==== 線條預設顏色列表（和Tab1一致）====
     default_colors = [
@@ -638,27 +654,21 @@ with tabs[2]:
         "#bcbd22", "#17becf"
     ]
 
-    # ==== 輔助：隨機色 fallback 用 ====
     def random_color():
         return "#{:06x}".format(random.randint(0, 0xFFFFFF))
 
-    # ==== 自動 load columns ====
     if st.session_state.all_columns is None:
         st.session_state.all_columns = load_columns_only()
 
-    # ==== 初始化 tab3_df_cache dict ====
     if "tab3_df_cache" not in st.session_state:
         st.session_state.tab3_df_cache = {}
 
-    # ==== 初始化 color_per_date dict ====
     if "tab3_color_per_date" not in st.session_state:
         st.session_state.tab3_color_per_date = {}
 
-    # ==== 畫面開始 ====
     if st.session_state.all_columns is not None:
         st.sidebar.title("⚙️ 日對日比對設定")
 
-        # 日期選擇
         date_options = pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
         selected_dates = st.sidebar.multiselect(
             "選擇要比對的日期 (可多選)",
@@ -666,18 +676,15 @@ with tabs[2]:
             default=[date_options[-1], date_options[-2]]
         )
 
-        # ==== 清除Cache按鈕 ====
         if st.sidebar.button("🗑️ 清除資料Cache"):
             st.session_state.tab3_df_cache = {}
             st.success("✅ 已清除 Tab3 資料Cache")
 
-        # PIT/TT欄位選擇
         available_pit_tt_prefixes = sorted(list(set(
             [col.split(" / ")[0] for col in st.session_state.all_columns if col.startswith("pit-") or col.startswith("tt-")]
         )))
         pit_tt_selected = st.sidebar.selectbox("選擇 PIT / TT 欄位", available_pit_tt_prefixes)
 
-        # Y軸區間
         y_axis_mode = st.sidebar.radio("Y 軸區間", ["Auto", "固定 0~1", "自訂 min/max"])
         y_min_custom = None
         y_max_custom = None
@@ -685,7 +692,6 @@ with tabs[2]:
             y_min_custom = st.sidebar.number_input("自訂 Y 軸最小值", value=0.0)
             y_max_custom = st.sidebar.number_input("自訂 Y 軸最大值", value=1.0)
 
-        # Resample取樣間隔
         sampling_interval_display = st.sidebar.selectbox(
             "取樣間隔 (Resample)",
             ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "10分鐘", "15分鐘"],
@@ -702,19 +708,11 @@ with tabs[2]:
         }
         sampling_interval = sampling_interval_map[sampling_interval_display]
 
-        # 線條粗細 → 全局一個 slider
         global_line_width = st.sidebar.slider("線條粗細 (全部線)", 1, 10, 2)
-
-        # 字體大小 → 全局一個 slider，預設 18
         font_size = st.sidebar.slider("字體大小 (圖表)", 10, 30, 18)
-
-        # 氣溫曲線 → 是否顯示
         show_weather = st.sidebar.checkbox("顯示柳營八翁氣溫曲線", value=True)
-
-        # 氣溫曲線 → 是否用右Y軸
         weather_right_yaxis = st.sidebar.checkbox("氣溫曲線用右側 Y 軸", value=True)
 
-        # 初始化 color_per_date (順序指定)
         color_per_date = st.session_state.tab3_color_per_date
         for i, date_str in enumerate(selected_dates):
             if date_str not in color_per_date:
@@ -723,13 +721,11 @@ with tabs[2]:
                 else:
                     color_per_date[date_str] = random_color()
 
-        # Sidebar 顏色選擇器 (可改色)
         for date_str in selected_dates:
             color_per_date[date_str] = st.sidebar.color_picker(
                 f"線條顏色 - {date_str}", color_per_date[date_str]
             )
 
-        # ==== 開始比對 ====
         if st.button("🚀 開始比對") and len(selected_dates) > 0:
             fig, ax1 = plt.subplots(figsize=(20, 10))
             ax2 = None
@@ -739,7 +735,6 @@ with tabs[2]:
             for date_str in selected_dates:
                 date_obj = pd.to_datetime(date_str).date()
 
-                # 🚀 判斷是否已有 cache，沒有才抓資料
                 if date_str in st.session_state.tab3_df_cache:
                     df_day = st.session_state.tab3_df_cache[date_str]
                     print(f"[CACHE] 使用 cache 資料 - {date_str}")
@@ -755,19 +750,15 @@ with tabs[2]:
 
                 full_col = [col for col in st.session_state.all_columns if col.startswith(pit_tt_selected)][0]
 
-                # Resample
                 df_day_resampled = df_day[[full_col]].resample(sampling_interval).mean()
                 df_day_resampled = df_day_resampled.asfreq(sampling_interval)
                 df_day_resampled = df_day_resampled.dropna()
 
-                # Index轉成虛擬日期 + 時間 (HH:MM)
                 df_day_resampled["Time_dt"] = df_day_resampled.index.map(
                     lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute, second=t.second)
                 )
-
                 df_day_resampled = df_day_resampled.sort_values("Time_dt")
 
-                # 畫 PIT/TT 線
                 ax1.plot(
                     df_day_resampled["Time_dt"],
                     df_day_resampled[full_col],
@@ -776,41 +767,37 @@ with tabs[2]:
                     color=color_per_date[date_str]
                 )
 
-                # 氣溫線
-                if show_weather:
-                    df_weather = fetch_weather_temperature(date_str)
-                    if not df_weather.empty:
-                        if weather_right_yaxis and ax2:
-                            ax2.plot(
-                                df_weather["Time_dt"],
-                                df_weather["TEMP"],
-                                label=f"{date_str} 氣溫",
-                                linewidth=2,
-                                linestyle="--",
-                                color="black"
-                            )
-                        else:
-                            ax1.plot(
-                                df_weather["Time_dt"],
-                                df_weather["TEMP"],
-                                label=f"{date_str} 氣溫",
-                                linewidth=2,
-                                linestyle="--",
-                                color="black"
-                            )
+                df_weather = fetch_weather_temperature(date_str)
 
-            # X軸設定
+                if show_weather and not df_weather.empty:
+                    if weather_right_yaxis and ax2:
+                        ax2.plot(
+                            df_weather["Time_dt"],
+                            df_weather["TEMP"],
+                            label=f"{date_str} 氣溫",
+                            linewidth=2,
+                            linestyle="--",
+                            color="black"
+                        )
+                    else:
+                        ax1.plot(
+                            df_weather["Time_dt"],
+                            df_weather["TEMP"],
+                            label=f"{date_str} 氣溫",
+                            linewidth=2,
+                            linestyle="--",
+                            color="black"
+                        )
+
             ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
             ax1.xaxis.set_major_locator(mdates.HourLocator(interval=1))
             ax1.set_xlim(pd.Timestamp("2000-01-01 00:00"), pd.Timestamp("2000-01-01 23:59"))
 
-            # Y軸設定
             if y_axis_mode == "固定 0~1":
                 ax1.set_ylim(0, 1)
             elif y_axis_mode == "自訂 min/max":
                 ax1.set_ylim(y_min_custom, y_max_custom)
 
-            # 標題 + 字體設定
             ax1.set_xlabel("時間 (HH:MM)", fontsize=font_size + 4, fontweight="bold")
             ax1.set_ylabel(full_col, fontsize=font_size + 4, fontweight="bold")
             ax1.set_title(f"不同日期同一時間比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})",
