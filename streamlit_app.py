@@ -604,7 +604,7 @@ with tabs[2]:
                     df_weather = pd.read_csv(
                         uploaded_file,
                         skiprows=header_line_idx + 1,
-                        names=["stno", "yyyymmddhh", "TEMP"],
+                        names=["stno", "yyyymmddhh", "TX01"],
                         encoding="utf-8-sig"
                     )
 
@@ -741,7 +741,7 @@ with tabs[2]:
         show_weather = st.sidebar.checkbox("顯示柳營八翁氣溫曲線", value=True)
 
         # ==== 新增上傳氣溫CSV檔 ====
-        uploaded_weather_csv = st.sidebar.file_uploader("上傳氣溫CSV檔 (含 ObsTime,TEMP 欄位)", type=["csv"])
+        uploaded_weather_csv = st.sidebar.file_uploader("上傳氣溫CSV檔 (含 ObsTime,TX01 欄位)", type=["csv"])
 
         color_per_date = st.session_state.tab3_color_per_date
         for i, date_str in enumerate(selected_dates):
