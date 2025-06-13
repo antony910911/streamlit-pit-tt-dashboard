@@ -570,16 +570,22 @@ with tabs[1]:
 with tabs[2]:
     st.title("📅 PIT/TT 日對日比對 (時間表示版)")
 
-    # 🚀 方法2 → 如果 all_columns 尚未有，先自己load一次
+    import random
+    import matplotlib.dates as mdates
+
+    # ==== 隨機顏色輔助函數 ====
+    def random_color():
+        return "#{:06x}".format(random.randint(0, 0xFFFFFF))
+
+    # ==== 自動 load columns ====
     if st.session_state.all_columns is None:
         st.session_state.all_columns = load_columns_only()
 
-    # 確保 all_columns 已經存在 → 開始畫面
+    # ==== 畫面開始 ====
     if st.session_state.all_columns is not None:
-        # === Sidebar 設定 ===
         st.sidebar.title("⚙️ 日對日比對設定")
 
-        # 選擇日期
+        # 日期選擇
         date_options = pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
         selected_dates = st.sidebar.multiselect(
             "選擇要比對的日期 (可多選)",
@@ -587,7 +593,7 @@ with tabs[2]:
             default=[date_options[-1], date_options[-2]]
         )
 
-        # 選擇 PIT/TT 欄位
+        # PIT/TT欄位選擇
         available_pit_tt_prefixes = sorted(list(set(
             [col.split(" / ")[0] for col in st.session_state.all_columns if col.startswith("pit-") or col.startswith("tt-")]
         )))
@@ -601,7 +607,7 @@ with tabs[2]:
             y_min_custom = st.sidebar.number_input("自訂 Y 軸最小值", value=0.0)
             y_max_custom = st.sidebar.number_input("自訂 Y 軸最大值", value=1.0)
 
-        # 取樣間隔 Resample
+        # Resample取樣間隔
         sampling_interval_display = st.sidebar.selectbox(
             "取樣間隔 (Resample)",
             ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "15分鐘"],
@@ -617,22 +623,27 @@ with tabs[2]:
         }
         sampling_interval = sampling_interval_map[sampling_interval_display]
 
-        # 線條顏色 & 粗細 per 日期
-        color_per_date = {}
-        line_width_per_date = {}
+        # 線條粗細 → 全局一個 slider
+        global_line_width = st.sidebar.slider("線條粗細 (全部線)", 1, 10, 2)
+
+        # 初始化 color_per_date dict (第一次自動隨機給色)
+        if "tab3_color_per_date" not in st.session_state:
+            st.session_state.tab3_color_per_date = {}
+
+        color_per_date = st.session_state.tab3_color_per_date
 
         for date_str in selected_dates:
-            default_color = "#1f77b4"
-            color_picker = st.sidebar.color_picker(f"線條顏色 - {date_str}", default_color)
-            color_per_date[date_str] = color_picker
+            if date_str not in color_per_date:
+                color_per_date[date_str] = random_color()
 
-            line_width = st.sidebar.slider(f"線條粗細 - {date_str}", 1, 10, 2)
-            line_width_per_date[date_str] = line_width
+        # Sidebar 顏色選擇器 (允許修改)
+        for date_str in selected_dates:
+            color_per_date[date_str] = st.sidebar.color_picker(
+                f"線條顏色 - {date_str}", color_per_date[date_str]
+            )
 
-        # 開始比對按鈕
+        # ==== 開始比對 ====
         if st.button("🚀 開始比對") and len(selected_dates) > 0:
-            import matplotlib.dates as mdates
-
             fig, ax = plt.subplots(figsize=(20, 10))
 
             for date_str in selected_dates:
@@ -651,7 +662,7 @@ with tabs[2]:
                 df_day_resampled = df_day_resampled.asfreq(sampling_interval)
                 df_day_resampled = df_day_resampled.dropna()
 
-                # 將 index 轉成虛擬日期 + 時間 (for HH:MM X 軸)
+                # Index轉成虛擬日期 + 時間 (HH:MM)
                 df_day_resampled["Time_dt"] = df_day_resampled.index.map(
                     lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute, second=t.second)
                 )
@@ -663,22 +674,20 @@ with tabs[2]:
                     df_day_resampled["Time_dt"],
                     df_day_resampled[full_col],
                     label=f"{date_str}",
-                    linewidth=line_width_per_date[date_str],
+                    linewidth=global_line_width,
                     color=color_per_date[date_str]
                 )
 
             # 繪圖設定
             ax.set_xlabel("時間 (HH:MM)", fontsize=16)
             ax.set_ylabel(full_col, fontsize=16)
-            ax.set_title(f"同一天時間不同日期比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})", fontsize=20)
+            ax.set_title(f"不同日期同一時間比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})", fontsize=20)
             ax.legend(fontsize=14)
             ax.grid(True)
 
-            # X 軸 formatter → HH:MM，locator 每1hr一格
+            # X軸時間顯示
             ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
             ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
-
-            # 固定 X 軸範圍 00:00 ~ 23:59
             ax.set_xlim(pd.Timestamp("2000-01-01 00:00"), pd.Timestamp("2000-01-01 23:59"))
 
             # Y軸設定
@@ -686,8 +695,6 @@ with tabs[2]:
                 ax.set_ylim(0, 1)
             elif y_axis_mode == "自訂 min/max":
                 ax.set_ylim(y_min_custom, y_max_custom)
-            else:
-                pass
 
             st.pyplot(fig, use_container_width=True)
     else:
