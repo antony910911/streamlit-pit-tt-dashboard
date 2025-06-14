@@ -160,6 +160,7 @@ if "df_all" not in st.session_state:
 
 st.set_page_config(
     page_title="台以乾式厭氧醱酵數據分析",
+    page_icon="🧪",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
