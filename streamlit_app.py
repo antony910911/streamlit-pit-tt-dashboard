@@ -569,11 +569,128 @@ with tabs[1]:
 
 with tabs[2]:
     st.title("📅 PIT/TT 多日變化趨勢 (可上傳柳營氣溫CSV)")
+    
+    date_options = pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
+    selected_dates = st.multiselect("選擇要比對的日期", options=date_options, default=[date_options[-1], date_options[-2]])
+
+    pit_tt_selected = st.selectbox("選擇 PIT / TT 欄位", available_pit_tt_prefixes)
+    show_weather = st.checkbox("顯示柳營氣溫曲線", value=True)
+    
+    sampling_interval_display = st.selectbox("取樣間隔", ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "10分鐘", "15分鐘"], index=4)
+    
+    sampling_interval_map = {
+        "5秒": "5s", "10秒": "10s", "30秒": "30s", "1分鐘": "1min",
+        "5分鐘": "5min", "10分鐘": "10min", "15分鐘": "15min",
+    }
+    sampling_interval = sampling_interval_map[sampling_interval_display]
+
+    uploaded_weather_csv = st.file_uploader("上傳氣溫CSV檔 (含 ObsTime,TX01 欄位)", type=["csv"])
+    submitted = st.form_submit_button("🚀 開始比對")
 
     import random
     import matplotlib.dates as mdates
     import pandas as pd
     import os
+
+    # ==== 讀氣象CSV函數 ====
+    def load_weather_csv(uploaded_file):
+        if uploaded_file is not None:
+           try:
+               # 先檢查所有行 → 是否為 MH 格式
+                lines = uploaded_file.getvalue().decode("utf-8-sig").splitlines()
+                is_mh_format = any(line.startswith("*") or line.startswith("#") for line in lines if line.strip() != "")
+
+                if is_mh_format:
+                    print(f"[INFO] 偵測到 MH 格式 → 自動尋找 header 行 + 處理")
+
+                    # 找出 # header 行
+                    header_line_idx = None
+                    for idx, line in enumerate(lines):
+                        if line.startswith("#"):
+                            header_line_idx = idx
+                            break
+
+                    if header_line_idx is None:
+                        raise ValueError("找不到欄位名稱行 (# 開頭) → 無法解析檔案！")
+
+                    # 確認 header 行內容 → 列印看看
+                    print(f"[DEBUG] header line content: {lines[header_line_idx]}")
+
+                    # 讀檔 → 從 header 行以下開始
+                    uploaded_file.seek(0)
+                    df_weather = pd.read_csv(
+                        uploaded_file,
+                        skiprows=header_line_idx + 1,
+                        names=["stno", "yyyymmddhh", "TX01"],
+                        encoding="utf-8-sig"
+                    )
+
+                    # 濾掉長度不等於10的 yyyymmddhh
+                    df_weather = df_weather[df_weather["yyyymmddhh"].astype(str).str.len() == 10]
+
+                    # 確認目前欄位有沒有空值
+                    print(f"[DEBUG] after length filter, df shape: {df_weather.shape}")
+                    print(f"[DEBUG] any NA in yyyymmddhh? → {df_weather['yyyymmddhh'].isna().sum()}")
+
+                    # 轉 ObsTime → 必須加 errors="coerce"
+                    df_weather["ObsTime"] = pd.to_datetime(
+                        df_weather["yyyymmddhh"].astype(str),
+                        format="%Y%m%d%H",
+                        errors="coerce"  # 重要 → 保證不炸
+                    )
+
+                    # 再濾掉 ObsTime 為 NaT 的行 → 乾淨資料
+                    df_weather = df_weather[df_weather["ObsTime"].notna()]
+
+                    # 轉 Time_dt
+                    df_weather["Time_dt"] = df_weather["ObsTime"].map(
+                        lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+                    )
+
+                    df_weather = df_weather.sort_values("Time_dt")
+                    print(f"[INFO] 使用 MH 格式檔案 讀取氣溫 → {uploaded_file.name}")
+                    return df_weather
+
+                else:
+                    print(f"[INFO] 偵測到 標準 CSV 格式 → 使用 read_csv 解析")
+                    uploaded_file.seek(0)
+                    df_weather = pd.read_csv(
+                        uploaded_file,
+                        sep=None,
+                        engine="python",
+                        encoding="utf-8-sig",
+                        on_bad_lines='warn'
+                    )
+
+                    # 防呆檢查 → 是否含 ObsTime 欄位
+                    if "ObsTime" not in df_weather.columns:
+                        raise ValueError("上傳的標準CSV缺少 ObsTime 欄位，請確認檔案格式是否正確（需含 ObsTime 欄位）！")
+
+                    df_weather["ObsTime"] = pd.to_datetime(
+                        df_weather["ObsTime"],
+                        format="%Y/%m/%d %H:%M",
+                        errors="coerce"  # 同樣加 errors="coerce"
+                    )
+
+                    df_weather = df_weather[df_weather["ObsTime"].notna()]  # drop NaT rows
+
+                    df_weather["Time_dt"] = df_weather["ObsTime"].map(
+                        lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+                    )
+
+                    df_weather = df_weather.sort_values("Time_dt")
+                    print(f"[INFO] 使用 上傳CSV 讀取氣溫 → {uploaded_file.name}")
+                    return df_weather
+
+           except Exception as e:
+                st.error(f"❌ 氣溫CSV檔格式錯誤，無法讀取！錯誤訊息: {e}")
+                print(f"[ERROR] 讀CSV失敗: {e}")
+                return pd.DataFrame()
+        else:
+            print(f"[WARNING] 尚未上傳氣溫CSV → 不畫氣溫線")
+            return pd.DataFrame()
+
+
 
     # ==== 線條預設顏色列表（和Tab1一致）====
     default_colors = [
@@ -584,62 +701,6 @@ with tabs[2]:
 
     def random_color():
         return "#{:06x}".format(random.randint(0, 0xFFFFFF))
-
-    def load_weather_csv(uploaded_file):
-        if uploaded_file is not None:
-           try:
-                lines = uploaded_file.getvalue().decode("utf-8-sig").splitlines()
-                is_mh_format = any(line.startswith("*") or line.startswith("#") for line in lines if line.strip() != "")
-                if is_mh_format:
-                    header_line_idx = next((idx for idx, line in enumerate(lines) if line.startswith("#")), None)
-                    if header_line_idx is None:
-                        raise ValueError("找不到欄位名稱行 (# 開頭) → 無法解析檔案！")
-                    uploaded_file.seek(0)
-                    df_weather = pd.read_csv(
-                        uploaded_file,
-                        skiprows=header_line_idx + 1,
-                        names=["stno", "yyyymmddhh", "TX01"],
-                        encoding="utf-8-sig"
-                    )
-                    df_weather = df_weather[df_weather["yyyymmddhh"].astype(str).str.len() == 10]
-                    df_weather["ObsTime"] = pd.to_datetime(
-                        df_weather["yyyymmddhh"].astype(str),
-                        format="%Y%m%d%H",
-                        errors="coerce"
-                    )
-                    df_weather = df_weather[df_weather["ObsTime"].notna()]
-                    df_weather["Time_dt"] = df_weather["ObsTime"].map(
-                        lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
-                    )
-                    df_weather = df_weather.sort_values("Time_dt")
-                    return df_weather
-                else:
-                    uploaded_file.seek(0)
-                    df_weather = pd.read_csv(
-                        uploaded_file,
-                        sep=None,
-                        engine="python",
-                        encoding="utf-8-sig",
-                        on_bad_lines='warn'
-                    )
-                    if "ObsTime" not in df_weather.columns:
-                        raise ValueError("上傳的標準CSV缺少 ObsTime 欄位，請確認檔案格式是否正確（需含 ObsTime 欄位）！")
-                    df_weather["ObsTime"] = pd.to_datetime(
-                        df_weather["ObsTime"],
-                        format="%Y/%m/%d %H:%M",
-                        errors="coerce"
-                    )
-                    df_weather = df_weather[df_weather["ObsTime"].notna()]
-                    df_weather["Time_dt"] = df_weather["ObsTime"].map(
-                        lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
-                    )
-                    df_weather = df_weather.sort_values("Time_dt")
-                    return df_weather
-           except Exception as e:
-                st.error(f"❌ 氣溫CSV檔格式錯誤，無法讀取！錯誤訊息: {e}")
-                return pd.DataFrame()
-        else:
-            return pd.DataFrame()
 
     if st.session_state.all_columns is None:
         st.session_state.all_columns = load_columns_only()
@@ -654,7 +715,11 @@ with tabs[2]:
         st.sidebar.title("⚙️ 多日比對設定")
 
         date_options = pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
-        selected_dates = st.sidebar.multiselect("選擇要比對的日期 (可多選)", options=date_options, default=[date_options[-1], date_options[-2]])
+        selected_dates = st.sidebar.multiselect(
+            "選擇要比對的日期 (可多選)",
+            options=date_options,
+            default=[date_options[-1], date_options[-2]]
+        )
 
         if st.sidebar.button("🗑️ 清除資料Cache"):
             st.session_state.tab3_df_cache = {}
@@ -666,66 +731,141 @@ with tabs[2]:
         pit_tt_selected = st.sidebar.selectbox("選擇 PIT / TT 欄位", available_pit_tt_prefixes)
 
         y_axis_mode = st.sidebar.radio("Y 軸區間", ["Auto", "固定 0~1", "自訂 min/max"])
-        y_min_custom = st.sidebar.number_input("自訂 Y 軸最小值", value=0.0) if y_axis_mode == "自訂 min/max" else None
-        y_max_custom = st.sidebar.number_input("自訂 Y 軸最大值", value=1.0) if y_axis_mode == "自訂 min/max" else None
+        y_min_custom = None
+        y_max_custom = None
+        if y_axis_mode == "自訂 min/max":
+            y_min_custom = st.sidebar.number_input("自訂 Y 軸最小值", value=0.0)
+            y_max_custom = st.sidebar.number_input("自訂 Y 軸最大值", value=1.0)
 
-        sampling_interval_display = st.sidebar.selectbox("取樣間隔 (Resample)", ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "10分鐘", "15分鐘"], index=4)
-        sampling_interval_map = {"5秒": "5s", "10秒": "10s", "30秒": "30s", "1分鐘": "1min", "5分鐘": "5min", "10分鐘": "10min", "15分鐘": "15min"}
+        sampling_interval_display = st.sidebar.selectbox(
+            "取樣間隔 (Resample)",
+            ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "10分鐘", "15分鐘"],
+            index=4
+        )
+        sampling_interval_map = {
+            "5秒": "5s",
+            "10秒": "10s",
+            "30秒": "30s",
+            "1分鐘": "1min",
+            "5分鐘": "5min",
+            "10分鐘": "10min",
+            "15分鐘": "15min",
+        }
         sampling_interval = sampling_interval_map[sampling_interval_display]
 
         global_line_width = st.sidebar.slider("線條粗細 (全部線)", 1, 10, 2)
         font_size = st.sidebar.slider("字體大小 (圖表)", 10, 30, 18)
         show_weather = st.sidebar.checkbox("顯示柳營氣溫曲線", value=True)
 
+        # ==== 新增上傳氣溫CSV檔 ====
         uploaded_weather_csv = st.sidebar.file_uploader("上傳氣溫CSV檔 (含 ObsTime,TX01 欄位)", type=["csv"])
 
         color_per_date = st.session_state.tab3_color_per_date
         for i, date_str in enumerate(selected_dates):
             if date_str not in color_per_date:
-                color_per_date[date_str] = default_colors[i] if i < len(default_colors) else random_color()
-            color_per_date[date_str] = st.sidebar.color_picker(f"線條顏色 - {date_str}", color_per_date[date_str])
+                if i < len(default_colors):
+                    color_per_date[date_str] = default_colors[i]
+                else:
+                    color_per_date[date_str] = random_color()
 
-        if len(selected_dates) > 0:
+        for date_str in selected_dates:
+            color_per_date[date_str] = st.sidebar.color_picker(
+                f"線條顏色 - {date_str}", color_per_date[date_str]
+            )
+
+        if st.button("🚀 開始比對") and len(selected_dates) > 0:
             fig, ax1 = plt.subplots(figsize=(20, 10))
 
             for date_str in selected_dates:
                 date_obj = pd.to_datetime(date_str).date()
+
                 if date_str in st.session_state.tab3_df_cache:
                     df_day = st.session_state.tab3_df_cache[date_str]
+                    print(f"[CACHE] 使用 cache 資料 - {date_str}")
                 else:
-                    df_day, _ = fetch_csv_and_load_df(start_date=date_obj, start_time=pd.to_datetime("00:00").time(), end_date=date_obj, end_time=pd.to_datetime("23:59").time())
+                    df_day, _ = fetch_csv_and_load_df(
+                        start_date=date_obj,
+                        start_time=pd.to_datetime("00:00").time(),
+                        end_date=date_obj,
+                        end_time=pd.to_datetime("23:59").time()
+                    )
                     st.session_state.tab3_df_cache[date_str] = df_day
+                    print(f"[FETCH] 下載資料 - {date_str}")
 
                 full_col = [col for col in st.session_state.all_columns if col.startswith(pit_tt_selected)][0]
-                df_day_resampled = df_day[[full_col]].resample(sampling_interval).mean().asfreq(sampling_interval).dropna()
-                df_day_resampled["Time_dt"] = df_day_resampled.index.map(lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute, second=t.second))
 
-                ax1.plot(df_day_resampled["Time_dt"], df_day_resampled[full_col], label=f"{date_str}", linewidth=global_line_width, color=color_per_date[date_str])
+                df_day_resampled = df_day[[full_col]].resample(sampling_interval).mean()
+                df_day_resampled = df_day_resampled.asfreq(sampling_interval)
+                df_day_resampled = df_day_resampled.dropna()
 
+                df_day_resampled["Time_dt"] = df_day_resampled.index.map(
+                    lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute, second=t.second)
+                )
+                df_day_resampled = df_day_resampled.sort_values("Time_dt")
+
+                ax1.plot(
+                    df_day_resampled["Time_dt"],
+                    df_day_resampled[full_col],
+                    label=f"{date_str}",
+                    linewidth=global_line_width,
+                    color=color_per_date[date_str]
+                )
+
+                # 預設先設為空 → 不畫就略過
                 df_weather = pd.DataFrame()
+
+                # 只有在有上傳且使用者勾選要畫氣溫時才處理
                 if show_weather and uploaded_weather_csv is not None:
                     df_weather = load_weather_csv(uploaded_weather_csv)
+
                     if "ObsTime" in df_weather.columns:
                         df_weather["ObsTime"] = pd.to_datetime(df_weather["ObsTime"], errors="coerce")
-                        df_weather = df_weather[df_weather["ObsTime"].notna() & (df_weather["ObsTime"].dt.date == date_obj)]
+                        df_weather = df_weather[df_weather["ObsTime"].notna()]
+                        df_weather = df_weather[df_weather["ObsTime"].dt.date == date_obj]
                     else:
                         st.warning(f"⚠️ 檔案內缺少 ObsTime 欄位，無法處理氣溫資料")
                         df_weather = pd.DataFrame()
 
                 if show_weather and not df_weather.empty:
                     df_weather["TX01"] = pd.to_numeric(df_weather["TX01"], errors="coerce")
+
+                    # ==== Resample 氣溫線 ====（這樣才會跟 PIT/TT 對齊）
                     df_weather.set_index("ObsTime", inplace=True)
-                    df_weather_resampled = df_weather[["TX01"]].resample(sampling_interval).mean().asfreq(sampling_interval).dropna()
-                    df_weather_resampled["Time_dt"] = df_weather_resampled.index.map(lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute))
-                    ax1.plot(df_weather_resampled["Time_dt"], df_weather_resampled["TX01"], label=f"{date_str} 柳營氣溫", linewidth=2, linestyle="--", marker='o', markersize=6, markerfacecolor=color_per_date[date_str], markeredgecolor=color_per_date[date_str], color=color_per_date[date_str])
+                    df_weather_resampled = df_weather[["TX01"]].resample(sampling_interval).mean()
+                    df_weather_resampled = df_weather_resampled.asfreq(sampling_interval)
+                    df_weather_resampled = df_weather_resampled.dropna()
+
+                    df_weather_resampled["Time_dt"] = df_weather_resampled.index.map(
+                        lambda t: pd.Timestamp(year=2000, month=1, day=1, hour=t.hour, minute=t.minute)
+                    )
+                    df_weather_resampled = df_weather_resampled.sort_values("Time_dt")
+
+                    # ==== 畫氣溫線，用 color_per_date ====
+                    ax1.plot(
+                        df_weather_resampled["Time_dt"],
+                        df_weather_resampled["TX01"],
+                        label=f"{date_str} 柳營氣溫",
+                        linewidth=2,
+                        linestyle="--",           # 保留虛線
+                        marker='o',               # 實心圓點
+                        markersize=6,             # 圓點大小，你可以調整，常用 5-8
+                        markerfacecolor=color_per_date[date_str],  # 圓點內顏色
+                        markeredgecolor=color_per_date[date_str],  # 圓點邊框顏色
+                        color=color_per_date[date_str]             # 線條顏色
+                    )
+
+
 
             ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
             ax1.xaxis.set_major_locator(mdates.HourLocator(interval=1))
             ax1.set_xlim(pd.Timestamp("2000-01-01 00:00"), pd.Timestamp("2000-01-01 23:59"))
+
+            # ==== 調大 X/Y軸刻度字體 ====
             tick_fontsize = font_size + 6
+
             ax1.tick_params(axis='x', labelsize=tick_fontsize)
             ax1.tick_params(axis='y', labelsize=tick_fontsize)
-            plt.xticks(rotation=45)
+            plt.xticks(rotation=45)  # 不要再另外指定 fontsize，tick_params 已經設定好了
             if y_axis_mode == "固定 0~1":
                 ax1.set_ylim(0, 1)
             elif y_axis_mode == "自訂 min/max":
@@ -733,10 +873,12 @@ with tabs[2]:
 
             ax1.set_xlabel("時間 (HH:MM)", fontsize=font_size + 4, fontweight="bold")
             ax1.set_ylabel(full_col, fontsize=font_size + 4, fontweight="bold")
-            ax1.set_title(f"多日變化趨勢比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})", fontsize=font_size + 10, fontweight="bold")
+            ax1.set_title(f"多日變化趨勢比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})",
+                          fontsize=font_size + 10, fontweight="bold")
             if show_weather:
                 fig.text(0.5, 0.92, "比對中央氣象局柳營氣象站(C0X320)氣溫", ha="center", fontsize=font_size + 2)
             ax1.legend(fontsize=font_size)
+
             ax1.grid(True)
             st.pyplot(fig, use_container_width=True)
     else:
