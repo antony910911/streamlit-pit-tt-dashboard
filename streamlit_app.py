@@ -794,10 +794,20 @@ with tabs[2]:
                     color=color_per_date[date_str]
                 )
 
-                # ==== 讀上傳的氣溫CSV + 畫氣溫線 ====
-                df_weather = load_weather_csv(uploaded_weather_csv)
-                # 加這一段！！ → 只保留該 date_str 的資料
-                df_weather = df_weather[df_weather["ObsTime"].dt.date == date_obj]
+                # 預設先設為空 → 不畫就略過
+                df_weather = pd.DataFrame()
+
+                # 只有在有上傳且使用者勾選要畫氣溫時才處理
+                if show_weather and uploaded_weather_csv is not None:
+                    df_weather = load_weather_csv(uploaded_weather_csv)
+
+                    if "ObsTime" in df_weather.columns:
+                        df_weather["ObsTime"] = pd.to_datetime(df_weather["ObsTime"], errors="coerce")
+                        df_weather = df_weather[df_weather["ObsTime"].notna()]
+                        df_weather = df_weather[df_weather["ObsTime"].dt.date == date_obj]
+                    else:
+                        st.warning(f"⚠️ 檔案內缺少 ObsTime 欄位，無法處理氣溫資料")
+                        df_weather = pd.DataFrame()
 
                 if show_weather and not df_weather.empty:
                     df_weather["TX01"] = pd.to_numeric(df_weather["TX01"], errors="coerce")
