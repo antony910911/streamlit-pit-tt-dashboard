@@ -861,7 +861,7 @@ with tabs[2]:
 
             # 主標題
             main_title = f"多日變化趨勢比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})"
-            ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=60 if has_subtitle else 40)
+            ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=60 if has_subtitle else 30)
 
             # 副標題
             if has_subtitle:
