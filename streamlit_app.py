@@ -858,7 +858,7 @@ with tabs[2]:
             ax1.set_ylabel(full_col, fontsize=font_size + 4, fontweight="bold")
             # 主標題
             main_title = f"多日變化趨勢比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})"
-            ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=40)
+            ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=60)
 
             # 副標題條件：同時勾選顯示氣溫 + 有上傳CSV
             if show_weather and uploaded_weather_csv is not None:
