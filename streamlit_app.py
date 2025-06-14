@@ -864,7 +864,7 @@ with tabs[2]:
             if show_weather and uploaded_weather_csv is not None:
                 fig.text(
                     0.5,                # 水平置中
-                    0.93,               # 略高於主標題
+                    0.91,               # 略高於主標題
                     "比對中央氣象局柳營氣象站(C0X320)氣溫",
                     ha="center",
                     fontsize=font_size + 2
