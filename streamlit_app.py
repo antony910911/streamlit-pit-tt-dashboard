@@ -864,7 +864,7 @@ with tabs[2]:
             if show_weather:
                 fig.text(
                     0.5,                 # 水平置中
-                    0.93,                # 垂直位置，稍低於頂端，剛好在主標題上面一行
+                    0.86,                # 垂直位置，稍低於頂端，剛好在主標題上面一行
                     "比對中央氣象局柳營氣象站(C0X320)氣溫",
                     ha="center",
                     fontsize=font_size + 2
