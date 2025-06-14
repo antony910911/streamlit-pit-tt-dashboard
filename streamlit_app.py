@@ -856,19 +856,21 @@ with tabs[2]:
 
             ax1.set_xlabel("時間 (HH:MM)", fontsize=font_size + 4, fontweight="bold")
             ax1.set_ylabel(full_col, fontsize=font_size + 4, fontweight="bold")
-            # 主標題
+            # 判斷是否有副標題（兩者條件都符合才算）
+            has_subtitle = show_weather and uploaded_weather_csv is not None
+
+            # 主標題文字
             main_title = f"多日變化趨勢比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})"
 
-            # 根據是否顯示副標題決定主標題距離
-            if show_weather and uploaded_weather_csv is not None:
-                ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=20)
+            # 設定標題
+            ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=10 if has_subtitle else 30)
+
+            # 如果有副標題，插入 fig.text 並適當調整圖表上方空間
+            if has_subtitle:
                 fig.text(0.5, 0.92, "比對中央氣象局柳營氣象站(C0X320)氣溫", ha="center", fontsize=font_size + 2)
-                fig.subplots_adjust(top=0.88)  # 留給副標題空間
+                plt.subplots_adjust(top=0.86)  # 有副標題，主標題靠近一點
             else:
-                ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=60)
-                fig.subplots_adjust(top=0.92)  # 主標題留白多一點
-
-
+                plt.subplots_adjust(top=0.90)  # 沒副標題，主標題往下留更多空
 
 
             ax1.grid(True)
