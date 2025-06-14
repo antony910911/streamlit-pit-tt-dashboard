@@ -857,24 +857,23 @@ with tabs[2]:
             ax1.set_xlabel("時間 (HH:MM)", fontsize=font_size + 4, fontweight="bold")
             ax1.set_ylabel(full_col, fontsize=font_size + 4, fontweight="bold")
             # 副標題條件：同時勾選顯示氣溫 + 有上傳CSV
+            # 標題處理邏輯
             has_subtitle = show_weather and uploaded_weather_csv is not None
-
-            # 主標題
             main_title = f"多日變化趨勢比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})"
             ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=60 if has_subtitle else 30)
 
-            # 副標題
             if has_subtitle:
                 fig.text(
-                    0.5,  # 水平置中
-                    0.91, # 主標題之上
+                    0.5,
+                    0.91,
                     "比對中央氣象局柳營氣象站(C0X320)氣溫",
                     ha="center",
                     fontsize=font_size + 2
                 )
 
-
+            ax1.legend(loc="best", fontsize=font_size)  # 加回 legend
             ax1.grid(True)
             st.pyplot(fig, use_container_width=True)
+
     else:
         st.warning("⚠️ 無法讀取欄位定義，請稍後重試。")
