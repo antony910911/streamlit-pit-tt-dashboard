@@ -858,17 +858,16 @@ with tabs[2]:
             ax1.set_ylabel(full_col, fontsize=font_size + 4, fontweight="bold")
             # 主標題
             main_title = f"多日變化趨勢比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})"
-            ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=60)
 
-            # 副標題條件：同時勾選顯示氣溫 + 有上傳CSV
+            # 根據是否顯示副標題決定主標題距離
             if show_weather and uploaded_weather_csv is not None:
-                fig.text(
-                    0.5,                # 水平置中
-                    0.91,               # 略高於主標題
-                    "比對中央氣象局柳營氣象站(C0X320)氣溫",
-                    ha="center",
-                    fontsize=font_size + 2
-                )
+                ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=20)
+                fig.text(0.5, 0.92, "比對中央氣象局柳營氣象站(C0X320)氣溫", ha="center", fontsize=font_size + 2)
+                fig.subplots_adjust(top=0.88)  # 留給副標題空間
+            else:
+                ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=60)
+                fig.subplots_adjust(top=0.92)  # 主標題留白多一點
+
 
 
 
