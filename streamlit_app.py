@@ -170,7 +170,7 @@ st.set_page_config(
 query_params = st.experimental_get_query_params()
 selected_tab = query_params.get("tab", ["首頁"])[0]
 
-tab_names = ["首頁", "分析功能", "PIT/TT日對日比對"]
+tab_names = ["首頁", "分析功能", "PIT/TT多日變化趨勢"]
 tab_idx = tab_names.index(selected_tab) if selected_tab in tab_names else 0
 
 tabs = st.tabs(tab_names)
@@ -568,7 +568,24 @@ with tabs[1]:
 
 
 with tabs[2]:
-    st.title("📅 PIT/TT 日對日比對 (可上傳柳營八翁氣溫CSV)")
+    st.title("📅 PIT/TT 多日變化趨勢 (可上傳柳營氣溫CSV)")
+    
+    date_options = pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
+    selected_dates = st.multiselect("選擇要比對的日期", options=date_options, default=[date_options[-1], date_options[-2]])
+
+    pit_tt_selected = st.selectbox("選擇 PIT / TT 欄位", available_pit_tt_prefixes)
+    show_weather = st.checkbox("顯示柳營氣溫曲線", value=True)
+    
+    sampling_interval_display = st.selectbox("取樣間隔", ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "10分鐘", "15分鐘"], index=4)
+    
+    sampling_interval_map = {
+        "5秒": "5s", "10秒": "10s", "30秒": "30s", "1分鐘": "1min",
+        "5分鐘": "5min", "10分鐘": "10min", "15分鐘": "15min",
+    }
+    sampling_interval = sampling_interval_map[sampling_interval_display]
+
+    uploaded_weather_csv = st.file_uploader("上傳氣溫CSV檔 (含 ObsTime,TX01 欄位)", type=["csv"])
+    submitted = st.form_submit_button("🚀 開始比對")
 
     import random
     import matplotlib.dates as mdates
@@ -695,7 +712,7 @@ with tabs[2]:
         st.session_state.tab3_color_per_date = {}
 
     if st.session_state.all_columns is not None:
-        st.sidebar.title("⚙️ 日對日比對設定")
+        st.sidebar.title("⚙️ 多日比對設定")
 
         date_options = pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
         selected_dates = st.sidebar.multiselect(
@@ -738,7 +755,7 @@ with tabs[2]:
 
         global_line_width = st.sidebar.slider("線條粗細 (全部線)", 1, 10, 2)
         font_size = st.sidebar.slider("字體大小 (圖表)", 10, 30, 18)
-        show_weather = st.sidebar.checkbox("顯示柳營八翁氣溫曲線", value=True)
+        show_weather = st.sidebar.checkbox("顯示柳營氣溫曲線", value=True)
 
         # ==== 新增上傳氣溫CSV檔 ====
         uploaded_weather_csv = st.sidebar.file_uploader("上傳氣溫CSV檔 (含 ObsTime,TX01 欄位)", type=["csv"])
@@ -856,8 +873,10 @@ with tabs[2]:
 
             ax1.set_xlabel("時間 (HH:MM)", fontsize=font_size + 4, fontweight="bold")
             ax1.set_ylabel(full_col, fontsize=font_size + 4, fontweight="bold")
-            ax1.set_title(f"不同日期同一時間比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})",
+            ax1.set_title(f"多日變化趨勢比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})",
                           fontsize=font_size + 10, fontweight="bold")
+            if show_weather:
+                fig.text(0.5, 0.92, "比對中央氣象局柳營氣象站(C0X320)氣溫", ha="center", fontsize=font_size + 2)
             ax1.legend(fontsize=font_size)
 
             ax1.grid(True)
