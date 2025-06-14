@@ -856,20 +856,22 @@ with tabs[2]:
 
             ax1.set_xlabel("時間 (HH:MM)", fontsize=font_size + 4, fontweight="bold")
             ax1.set_ylabel(full_col, fontsize=font_size + 4, fontweight="bold")
+            # 副標題條件：同時勾選顯示氣溫 + 有上傳CSV
+            has_subtitle = show_weather and uploaded_weather_csv is not None
+
             # 主標題
             main_title = f"多日變化趨勢比對 - {pit_tt_selected} (取樣間隔：{sampling_interval_display})"
-            ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=60)
+            ax1.set_title(main_title, fontsize=font_size + 10, fontweight="bold", pad=60 if has_subtitle else 40)
 
-            # 副標題條件：同時勾選顯示氣溫 + 有上傳CSV
-            if show_weather and uploaded_weather_csv is not None:
+            # 副標題
+            if has_subtitle:
                 fig.text(
-                    0.5,                # 水平置中
-                    0.91,               # 略高於主標題
+                    0.5,  # 水平置中
+                    0.91, # 主標題之上
                     "比對中央氣象局柳營氣象站(C0X320)氣溫",
                     ha="center",
                     fontsize=font_size + 2
                 )
-
 
 
             ax1.grid(True)
