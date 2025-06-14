@@ -570,22 +570,30 @@ with tabs[1]:
 with tabs[2]:
     st.title("📅 PIT/TT 多日變化趨勢 (可上傳柳營氣溫CSV)")
 
-    date_options = pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
-    selected_dates = st.multiselect("選擇要比對的日期", options=date_options, default=[date_options[-1], date_options[-2]])
+    with st.form("tab3_form"):
+        date_options = pd.date_range(end=pd.Timestamp.today(), periods=14).strftime("%Y-%m-%d").tolist()
+        selected_dates = st.multiselect("選擇要比對的日期", options=date_options, default=[date_options[-1], date_options[-2]])
 
-    pit_tt_selected = st.selectbox("選擇 PIT / TT 欄位", available_pit_tt_prefixes)
-    show_weather = st.checkbox("顯示柳營氣溫曲線", value=True)
+        # available_pit_tt_prefixes 須事先定義
+        if "available_pit_tt_prefixes" in globals():
+            pit_tt_selected = st.selectbox("選擇 PIT / TT 欄位", available_pit_tt_prefixes)
+        else:
+            st.error("⚠️ 尚未定義 available_pit_tt_prefixes")
+            st.stop()
 
-    sampling_interval_display = st.selectbox("取樣間隔", ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "10分鐘", "15分鐘"], index=4)
+        show_weather = st.checkbox("顯示柳營氣溫曲線", value=True)
 
-    sampling_interval_map = {
-        "5秒": "5s", "10秒": "10s", "30秒": "30s", "1分鐘": "1min",
-        "5分鐘": "5min", "10分鐘": "10min", "15分鐘": "15min",
-    }
-    sampling_interval = sampling_interval_map[sampling_interval_display]
+        sampling_interval_display = st.selectbox("取樣間隔", ["5秒", "10秒", "30秒", "1分鐘", "5分鐘", "10分鐘", "15分鐘"], index=4)
 
-    uploaded_weather_csv = st.file_uploader("上傳氣溫CSV檔 (含 ObsTime,TX01 欄位)", type=["csv"])
-    submitted = st.form_submit_button("🚀 開始比對")
+        sampling_interval_map = {
+            "5秒": "5s", "10秒": "10s", "30秒": "30s", "1分鐘": "1min",
+            "5分鐘": "5min", "10分鐘": "10min", "15分鐘": "15min",
+        }
+        sampling_interval = sampling_interval_map[sampling_interval_display]
+
+        uploaded_weather_csv = st.file_uploader("上傳氣溫CSV檔 (含 ObsTime,TX01 欄位)", type=["csv"])
+        submitted = st.form_submit_button("🚀 開始比對")
+
 
 
     import random
